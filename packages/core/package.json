@@ -1,0 +1,18 @@
+{
+  "name": "@weegood/core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Platform-agnostic domain model, taste profile and recommendation engine for Weegood.",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -p tsconfig.json"
+  }
+}
