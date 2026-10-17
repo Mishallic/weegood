@@ -3,44 +3,49 @@
 Priorities: **P0** blocks the milestone, **P1** should ship with it, **P2** nice to have.
 Each item has a one-line summary so the list is readable without opening tickets.
 
-## M0: Foundation
+## M0: Foundation (done 2026-10-17)
 
 - [x] npm-workspaces monorepo with shared TypeScript, ESLint and Prettier config.
 - [x] Product brief, architecture overview and founding ADRs.
-- [ ] `packages/core` with domain model, vibe math and a deterministic seeded catalog.
-- [ ] Taste profile and explainable content-based recommendation engine, fully tested.
-- [ ] Playlist, follow and local-track domain logic with repository contracts.
+- [x] `packages/core` with domain model, vibe math and a deterministic seeded catalog.
+- [x] Taste profile and explainable content-based recommendation engine, fully tested.
+- [x] Playlist, follow and local-track domain logic with repository contracts.
 
-## M1: Web MVP
+## M1: Web MVP (feature complete 2026-10-17, two P2 items open)
 
-- [ ] **P0** App shell: layout, routing, design tokens, dark and light themes, player bar.
-- [ ] **P0** IndexedDB persistence behind the core repository contracts.
-- [ ] **P0** Onboarding questionnaire that seeds the taste profile; returning users skip it.
-- [ ] **P0** Home feed with "For you", "Because you follow", "From people you follow", "Fresh vibes".
-- [ ] **P0** Browse genres and artists with follow and unfollow.
-- [ ] **P0** Playlists: create, rename, delete, add, remove, reorder.
-- [ ] **P0** Local file import (MP3, WAV, FLAC, OGG, AAC) stored on-device and playable.
-- [ ] **P0** Player: play, pause, previous, next, seek, volume, shuffle, repeat, queue.
-- [ ] **P1** Likes and listen history continuously update the taste profile.
-- [ ] **P1** People: demo profiles with public playlists; follow them.
-- [ ] **P1** Search across tracks, artists, genres and people.
-- [ ] **P1** Settings: export and import all data as JSON, reset profile.
-- [ ] **P1** Keyboard shortcuts (space, arrows, `/` for search). Small, high perceived quality.
-- [ ] **P1** Media Session API so lock screens and headsets control playback.
-- [ ] **P2** Drag-and-drop reordering in playlists (buttons exist today, drag is nicer).
+- [x] **P0** App shell: layout, routing, design tokens, dark and light themes, player bar.
+- [x] **P0** IndexedDB persistence behind the core repository contracts.
+- [x] **P0** Onboarding questionnaire that seeds the taste profile; returning users skip it.
+- [x] **P0** Home feed with "For you", "Because you follow", "From people you follow", "Fresh vibes".
+- [x] **P0** Browse genres and artists with follow and unfollow.
+- [x] **P0** Playlists: create, rename, delete, add, remove, reorder.
+- [x] **P0** Local file import (MP3, WAV, FLAC, OGG, AAC) stored on-device and playable.
+- [x] **P0** Player: play, pause, previous, next, seek, volume, shuffle, repeat, queue.
+- [x] **P1** Likes and listen history continuously update the taste profile.
+- [x] **P1** People: demo profiles with public playlists; follow them.
+- [x] **P1** Search across tracks, artists, genres and people.
+- [x] **P1** Settings: export and import all data as JSON, reset profile.
+- [x] **P1** Keyboard shortcuts (space, J/L, N/P, M, `/` for search).
+- [x] **P1** Media Session API so lock screens and headsets control playback.
+- [ ] **P2** Drag-and-drop reordering in playlists (move buttons exist today, drag is nicer).
 - [ ] **P2** Read ID3 and Vorbis tags from imported files instead of inferring from file names.
+
+Bundle at M1: 106 KB gzipped JavaScript, 5 KB CSS, against the 150 KB budget.
 
 ## M2: Concept validation
 
+- [ ] **P0** Tester round: 20 to 30 people, two weeks, against the success criteria in PRODUCT.md.
 - [ ] **P0** Opt-in local analytics: count onboarding completion, recommendation acceptance,
       playlist creation. Shown to the user on the settings page; exportable for tester
       interviews. No network.
-- [ ] **P0** In-app feedback on recommendations ("more like this", "not for me") wired into the
-      profile with stronger weights than implicit signals.
-- [ ] **P1** Service worker for offline shell and installability as a PWA.
+- [ ] **P0** In-app feedback on recommendations ("more like this" next to "not for me") wired into
+      the profile with stronger weights than implicit signals. "Not for me" exists today.
+- [ ] **P1** Service worker for offline shell and installability as a PWA (manifest exists).
 - [ ] **P1** Accessibility audit: focus order, contrast, screen reader labels on the player.
 - [ ] **P1** Vibe extraction for local files: estimate energy and tempo with Web Audio analysis so
       imported tracks participate in recommendations instead of sitting outside the model.
+- [ ] **P1** Real-browser end-to-end tests (Playwright) for onboarding, play, import and playlist
+      flows. Unit and jsdom coverage exists; audio and file pickers need a real browser.
 - [ ] **P2** Visual polish pass once tester feedback lands. The UI is intentionally plain today.
 
 ## M3: Platform

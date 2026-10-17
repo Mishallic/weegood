@@ -5,8 +5,8 @@ Music that gets your vibe.
 Weegood is a lightweight, cross-platform music player with a taste-aware recommendation
 engine, playlists, follows, and first-class support for the music you already own.
 
-**Status:** pre-alpha. We are shipping a web MVP first to validate the concept, then bringing
-the same core to mobile and desktop.
+**Status:** pre-alpha. The web MVP is feature complete and ready for a tester round (see
+[docs/ROADMAP.md](docs/ROADMAP.md), milestone M2). Mobile and desktop follow on the same core.
 
 ## What it does
 
