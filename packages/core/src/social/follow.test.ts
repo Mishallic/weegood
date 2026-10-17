@@ -20,6 +20,6 @@ describe('toggleFollow', () => {
     expect(isFollowing(follows, 'genre', 'jazz')).toBe(true);
     expect(isFollowing(follows, 'artist', 'jazz')).toBe(false);
     expect([...followedIds(follows, 'genre')]).toEqual(['jazz']);
-    expect(followedIds(follows, 'user').size).toBe(0);
+    expect(followedIds(follows, 'artist').size).toBe(0);
   });
 });

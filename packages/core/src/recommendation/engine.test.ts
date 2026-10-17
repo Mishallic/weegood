@@ -4,12 +4,14 @@ import { DEMO_CATALOG } from '../catalog/seed';
 import type { Follow, ListenEvent, Recommendation, Track } from '../domain/types';
 import { vibeSimilarity } from '../domain/vibe';
 import {
+  featuresForTrack,
+  rankAll,
   recommendArtists,
   recommendTracks,
   similarTracks,
   type RecommendationInput,
-  WEIGHTS,
 } from './engine';
+import { createRanker, PRIOR_WEIGHTS, RANK_FEATURES } from './ranker';
 import { createEmptyProfile, createProfileFromOnboarding } from './tasteProfile';
 
 const index = createCatalogIndex(DEMO_CATALOG);
@@ -20,7 +22,6 @@ function input(overrides: Partial<RecommendationInput> = {}): RecommendationInpu
     profile: createEmptyProfile(NOW),
     tracks: DEMO_CATALOG.tracks,
     artistsById: index.artistsById,
-    genresById: index.genresById,
     follows: [],
     recentListens: [],
     now: NOW,
@@ -33,6 +34,14 @@ function track(id: string): Track {
   if (!found) throw new Error(`missing track ${id}`);
   return found;
 }
+
+function scoreOf(list: Recommendation[], id: string): number {
+  const found = list.find((r) => r.track.id === id);
+  if (!found) throw new Error(`${id} missing from results`);
+  return found.score;
+}
+
+const EVERYTHING = { limit: 96, maxPerArtist: 99, diversity: 0 };
 
 function meanPairwiseSimilarity(items: Recommendation[]): number {
   let total = 0;
@@ -73,34 +82,33 @@ describe('recommendTracks', () => {
     expect(new Set(artists).size).toBe(artists.length);
   });
 
-  it('never recommends liked or disliked tracks', () => {
+  it('never recommends disliked tracks and hides liked ones from discovery', () => {
     const profile = {
       ...createEmptyProfile(NOW),
       likedTrackIds: ['lux-marlowe-1'],
       dislikedTrackIds: ['lux-marlowe-2'],
     };
-    const ids = recommendTracks(input({ profile }), { limit: 96, maxPerArtist: 99 }).map(
-      (r) => r.track.id,
-    );
+    const ids = recommendTracks(input({ profile }), EVERYTHING).map((r) => r.track.id);
     expect(ids).not.toContain('lux-marlowe-1');
     expect(ids).not.toContain('lux-marlowe-2');
     expect(ids.length).toBe(94);
+
+    const everything = rankAll(input({ profile })).map((r) => r.track.id);
+    expect(everything).toContain('lux-marlowe-1');
+    expect(everything).not.toContain('lux-marlowe-2');
+    expect(everything.length).toBe(95);
   });
 
   it('boosts followed artists and says so', () => {
     const follows: Follow[] = [{ kind: 'artist', targetId: 'kessler-grid', createdAt: NOW }];
-    const opts = { limit: 96, maxPerArtist: 99, diversity: 0 };
-    const plain = recommendTracks(input(), opts).find((r) => r.track.id === 'kessler-grid-1');
-    const boosted = recommendTracks(input({ follows }), opts).find(
-      (r) => r.track.id === 'kessler-grid-1',
-    );
-    if (!plain || !boosted) throw new Error('track missing from results');
-    expect(boosted.score).toBeCloseTo(plain.score + WEIGHTS.followArtist, 6);
-    expect(boosted.reasons[0]).toBe('Because you follow Kessler Grid');
+    const plain = recommendTracks(input(), EVERYTHING);
+    const boosted = recommendTracks(input({ follows }), EVERYTHING);
+    expect(scoreOf(boosted, 'kessler-grid-1')).toBeGreaterThan(scoreOf(plain, 'kessler-grid-1'));
+    const reasons = boosted.find((r) => r.track.id === 'kessler-grid-1')?.reasons ?? [];
+    expect(reasons).toContain('Because you follow Kessler Grid');
   });
 
-  it('penalises tracks played today and skipped tracks', () => {
-    const opts = { limit: 96, maxPerArtist: 99, diversity: 0 };
+  it('penalises tracks played today, and skipped ones harder', () => {
     const played: ListenEvent = {
       trackId: 'juno-ward-1',
       startedAt: NOW - 3_600_000,
@@ -115,17 +123,10 @@ describe('recommendTracks', () => {
       completed: false,
       skipped: true,
     };
-    const base = recommendTracks(input(), opts);
-    const after = recommendTracks(input({ recentListens: [played, skipped] }), opts);
-    const find = (list: Recommendation[], id: string) => list.find((r) => r.track.id === id)?.score;
-    expect(find(after, 'juno-ward-1')).toBeCloseTo(
-      (find(base, 'juno-ward-1') ?? 0) - WEIGHTS.playedToday,
-      6,
-    );
-    expect(find(after, 'juno-ward-2')).toBeCloseTo(
-      (find(base, 'juno-ward-2') ?? 0) - WEIGHTS.playedToday - WEIGHTS.skippedRecently,
-      6,
-    );
+    const base = recommendTracks(input(), EVERYTHING);
+    const after = recommendTracks(input({ recentListens: [played, skipped] }), EVERYTHING);
+    expect(scoreOf(after, 'juno-ward-1')).toBeLessThan(scoreOf(base, 'juno-ward-1'));
+    expect(scoreOf(after, 'juno-ward-2')).toBeLessThan(scoreOf(after, 'juno-ward-1'));
   });
 
   it('can exclude everything already listened to', () => {
@@ -138,8 +139,7 @@ describe('recommendTracks', () => {
       skipped: false,
     };
     const ids = recommendTracks(input({ recentListens: [listened] }), {
-      limit: 96,
-      maxPerArtist: 99,
+      ...EVERYTHING,
       excludeListened: true,
     }).map((r) => r.track.id);
     expect(ids).not.toContain('honeyglass-3');
@@ -149,7 +149,7 @@ describe('recommendTracks', () => {
   it('spreads results out when diversity is high', () => {
     const profile = createProfileFromOnboarding(
       { genreIds: ['techno', 'house'], moodIds: ['hype'], artistIds: [], context: 'party' },
-      DEMO_CATALOG,
+      { artists: DEMO_CATALOG.artists },
       NOW,
     );
     const focused = recommendTracks(input({ profile }), {
@@ -165,14 +165,44 @@ describe('recommendTracks', () => {
     expect(meanPairwiseSimilarity(spread)).toBeLessThan(meanPairwiseSimilarity(focused));
   });
 
-  it("explains vibe matches in the listener's own terms", () => {
-    const profile = createProfileFromOnboarding(
-      { genreIds: ['ambient'], moodIds: ['chill', 'dreamy'], artistIds: [], context: 'relax' },
-      DEMO_CATALOG,
-      NOW,
+  it('rewards tracks in moods the listener chose and explains it', () => {
+    const profile = { ...createEmptyProfile(NOW), moodWeights: { Melancholy: 1 } };
+    const melancholy = DEMO_CATALOG.tracks.find((t) => t.mood === 'Melancholy');
+    if (!melancholy) throw new Error('fixture has no melancholy track');
+    const features = featuresForTrack(melancholy, input({ profile }));
+    expect(features.mood).toBe(1);
+    const result = recommendTracks(input({ profile }), EVERYTHING).find(
+      (r) => r.track.id === melancholy.id,
     );
-    const [top] = recommendTracks(input({ profile }), { limit: 1 });
-    expect(top?.reasons.join(' ')).toMatch(/You're into Ambient|Matches your .* vibe/);
+    expect(result?.reasons).toContain('Fits your melancholy mood');
+  });
+
+  it('calls out popularity when it carries the pick', () => {
+    const popular = DEMO_CATALOG.tracks.reduce((best, t) =>
+      t.popularity > best.popularity ? t : best,
+    );
+    const results = recommendTracks(input(), EVERYTHING);
+    const reasons = results.find((r) => r.track.id === popular.id)?.reasons ?? [];
+    expect(reasons.some((reason) => reason.startsWith('Trending'))).toBe(true);
+  });
+
+  it('follows the learned ranker: a popularity-obsessed model puts the most played track first', () => {
+    const ranker = { ...createRanker(), weights: { ...PRIOR_WEIGHTS, vibe: 0, popularity: 6 } };
+    const profile = { ...createEmptyProfile(NOW), ranker };
+    const [top] = recommendTracks(input({ profile }), EVERYTHING);
+    const mostPlayed = DEMO_CATALOG.tracks.reduce((best, t) =>
+      t.popularity > best.popularity ? t : best,
+    );
+    expect(top?.track.id).toBe(mostPlayed.id);
+  });
+
+  it('produces a complete feature vector in 0..1', () => {
+    const features = featuresForTrack(track('imani-rowe-1'), input());
+    for (const name of RANK_FEATURES) {
+      expect(features[name]).toBeGreaterThanOrEqual(0);
+      expect(features[name]).toBeLessThanOrEqual(1);
+    }
+    expect(features.novelty).toBe(1);
   });
 });
 
@@ -197,7 +227,7 @@ describe('recommendArtists', () => {
     const follows: Follow[] = [{ kind: 'artist', targetId: 'lux-marlowe', createdAt: NOW }];
     const profile = createProfileFromOnboarding(
       { genreIds: ['pop'], moodIds: ['feel-good'], artistIds: [], context: 'party' },
-      DEMO_CATALOG,
+      { artists: DEMO_CATALOG.artists },
       NOW,
     );
     const results = recommendArtists(input({ profile, follows }), DEMO_CATALOG.artists, 5);

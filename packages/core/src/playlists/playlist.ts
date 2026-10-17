@@ -24,16 +24,21 @@ export interface CreatePlaylistInput {
   trackIds?: readonly Id[];
 }
 
+/** A playlist owned by the local user. Provider playlists are mapped by the provider adapter. */
 export function createPlaylist(input: CreatePlaylistInput, now: number): Playlist {
   const error = validatePlaylistName(input.name);
   if (error) throw new Error(error);
   return {
     id: input.id,
     ownerId: input.ownerId,
+    ownerName: null,
     name: normalizePlaylistName(input.name),
     description: (input.description ?? '').trim().slice(0, PLAYLIST_DESCRIPTION_MAX),
     trackIds: dedupe(input.trackIds ?? []),
+    artworkUrl: null,
     isPublic: input.isPublic ?? false,
+    provider: null,
+    externalId: null,
     createdAt: now,
     updatedAt: now,
   };

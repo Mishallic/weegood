@@ -1,12 +1,14 @@
 import type {
+  Artist,
   Follow,
   FollowKind,
   Id,
   ListenEvent,
+  MeasuredVibe,
   Playlist,
-  TasteProfile,
   Track,
 } from '../domain/types';
+import type { TasteProfileV2 } from '../recommendation/tasteProfile';
 
 /**
  * Storage contracts (ADR 0004). Apps implement these for their platform (IndexedDB on web,
@@ -15,8 +17,9 @@ import type {
  */
 
 export interface ProfileRepository {
-  get(): Promise<TasteProfile | null>;
-  save(profile: TasteProfile): Promise<void>;
+  /** Raw persisted value; callers run it through `normalizeProfile`. */
+  get(): Promise<unknown | null>;
+  save(profile: TasteProfileV2): Promise<void>;
   clear(): Promise<void>;
 }
 
@@ -32,10 +35,33 @@ export interface FollowRepository {
   remove(kind: FollowKind, targetId: Id): Promise<void>;
 }
 
+/** Tracks imported from the device. */
 export interface LocalTrackRepository {
   list(): Promise<Track[]>;
   save(track: Track): Promise<void>;
   remove(id: Id): Promise<void>;
+}
+
+/** Streamed tracks the app has seen, kept so playlists and history resolve offline and across sessions. */
+export interface TrackCacheRepository {
+  list(): Promise<Track[]>;
+  saveMany(tracks: readonly Track[]): Promise<void>;
+  remove(id: Id): Promise<void>;
+  clear(): Promise<void>;
+}
+
+/** Artists the listener follows or has looked at. */
+export interface ArtistCacheRepository {
+  list(): Promise<Artist[]>;
+  saveMany(artists: readonly Artist[]): Promise<void>;
+  clear(): Promise<void>;
+}
+
+/** Audio features measured on-device (ADR 0011). */
+export interface MeasuredVibeRepository {
+  list(): Promise<MeasuredVibe[]>;
+  save(measured: MeasuredVibe): Promise<void>;
+  clear(): Promise<void>;
 }
 
 export interface AudioBlobStore<TBlob> {
@@ -56,6 +82,9 @@ export interface Repositories<TBlob> {
   playlists: PlaylistRepository;
   follows: FollowRepository;
   localTracks: LocalTrackRepository;
+  tracks: TrackCacheRepository;
+  artists: ArtistCacheRepository;
+  measuredVibes: MeasuredVibeRepository;
   audioBlobs: AudioBlobStore<TBlob>;
   listens: ListenRepository;
   /** Wipe everything. Used by "reset" in settings and by tests. */

@@ -1,20 +1,15 @@
-import type { Artist, Genre, Id, Playlist, Track, User } from '../domain/types';
+import type { Artist, Id, Playlist, Track } from '../domain/types';
 
+/** A bundle of entities, used by the test fixture and by tests that need lookups. */
 export interface Catalog {
-  genres: Genre[];
   artists: Artist[];
   tracks: Track[];
-  /** Demo people and their public playlists until a real social graph exists (ROADMAP M3). */
-  users: User[];
   playlists: Playlist[];
 }
 
 export interface CatalogIndex {
   tracksById: ReadonlyMap<Id, Track>;
   artistsById: ReadonlyMap<Id, Artist>;
-  genresById: ReadonlyMap<Id, Genre>;
-  usersById: ReadonlyMap<Id, User>;
-  usersByHandle: ReadonlyMap<string, User>;
   playlistsById: ReadonlyMap<Id, Playlist>;
   tracksByArtistId: ReadonlyMap<Id, Track[]>;
   tracksByGenreId: ReadonlyMap<Id, Track[]>;
@@ -34,9 +29,6 @@ export function createCatalogIndex(catalog: Catalog): CatalogIndex {
   return {
     tracksById: new Map(catalog.tracks.map((track) => [track.id, track])),
     artistsById: new Map(catalog.artists.map((artist) => [artist.id, artist])),
-    genresById: new Map(catalog.genres.map((genre) => [genre.id, genre])),
-    usersById: new Map(catalog.users.map((user) => [user.id, user])),
-    usersByHandle: new Map(catalog.users.map((user) => [user.handle, user])),
     playlistsById: new Map(catalog.playlists.map((playlist) => [playlist.id, playlist])),
     tracksByArtistId,
     tracksByGenreId,

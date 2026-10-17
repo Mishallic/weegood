@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { DEMO_CATALOG } from '../catalog/seed';
 import { createLocalTrack } from '../library/localTrack';
 import { createPlaylist } from '../playlists/playlist';
 import { createEmptyProfile } from '../recommendation/tasteProfile';
@@ -12,7 +13,7 @@ describe('createInMemoryRepositories', () => {
 
     expect(await repos.profile.get()).toBeNull();
     await repos.profile.save(createEmptyProfile(NOW));
-    expect((await repos.profile.get())?.createdAt).toBe(NOW);
+    expect((await repos.profile.get()) as { createdAt: number }).toMatchObject({ createdAt: NOW });
 
     const playlist = createPlaylist({ id: 'p1', ownerId: 'me', name: 'Mix' }, NOW);
     await repos.playlists.save(playlist);
@@ -42,6 +43,35 @@ describe('createInMemoryRepositories', () => {
     await repos.audioBlobs.remove('t1');
     expect(await repos.audioBlobs.get('t1')).toBeUndefined();
 
+    const streamed = DEMO_CATALOG.tracks.slice(0, 3);
+    await repos.tracks.saveMany(streamed);
+    await repos.tracks.saveMany([streamed[0] as (typeof streamed)[number]]);
+    expect(await repos.tracks.list()).toHaveLength(3);
+    await repos.tracks.remove(streamed[1]?.id ?? '');
+    expect(await repos.tracks.list()).toHaveLength(2);
+
+    await repos.artists.saveMany(DEMO_CATALOG.artists.slice(0, 2));
+    expect(await repos.artists.list()).toHaveLength(2);
+
+    const measured = {
+      trackId: streamed[0]?.id ?? '',
+      vibe: createEmptyProfile(NOW).vibe,
+      features: {
+        rmsDb: -12,
+        spectralCentroidHz: 1500,
+        bassRatio: 0.3,
+        spectralFlatness: 0.2,
+        tempoBpm: 120,
+        beatStrength: 0.5,
+        majorness: 0.6,
+        durationSeconds: 30,
+      },
+      measuredAt: NOW,
+    };
+    await repos.measuredVibes.save(measured);
+    await repos.measuredVibes.save({ ...measured, measuredAt: NOW + 1 });
+    expect(await repos.measuredVibes.list()).toHaveLength(1);
+
     const event = {
       trackId: 't1',
       startedAt: NOW,
@@ -59,6 +89,9 @@ describe('createInMemoryRepositories', () => {
     await repos.clearAll();
     expect(await repos.profile.get()).toBeNull();
     expect(await repos.localTracks.list()).toEqual([]);
+    expect(await repos.tracks.list()).toEqual([]);
+    expect(await repos.artists.list()).toEqual([]);
+    expect(await repos.measuredVibes.list()).toEqual([]);
     expect(await repos.listens.recent(10)).toEqual([]);
   });
 });

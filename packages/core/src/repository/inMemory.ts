@@ -1,21 +1,26 @@
 import {
   followKey,
+  type Artist,
   type Follow,
   type FollowKind,
   type Id,
   type ListenEvent,
+  type MeasuredVibe,
   type Playlist,
-  type TasteProfile,
   type Track,
 } from '../domain/types';
+import type { TasteProfileV2 } from '../recommendation/tasteProfile';
 import type { Repositories } from './types';
 
 /** In-memory repositories. Used by tests and as the reference behaviour for real adapters. */
 export function createInMemoryRepositories<TBlob = unknown>(): Repositories<TBlob> {
-  let profile: TasteProfile | null = null;
+  let profile: TasteProfileV2 | null = null;
   const playlists = new Map<Id, Playlist>();
   const follows = new Map<string, Follow>();
   const localTracks = new Map<Id, Track>();
+  const tracks = new Map<Id, Track>();
+  const artists = new Map<Id, Artist>();
+  const measured = new Map<Id, MeasuredVibe>();
   const blobs = new Map<Id, TBlob>();
   let listens: ListenEvent[] = [];
 
@@ -64,6 +69,42 @@ export function createInMemoryRepositories<TBlob = unknown>(): Repositories<TBlo
         localTracks.delete(id);
       },
     },
+    tracks: {
+      async list() {
+        return [...tracks.values()];
+      },
+      async saveMany(items) {
+        for (const track of items) tracks.set(track.id, track);
+      },
+      async remove(id) {
+        tracks.delete(id);
+      },
+      async clear() {
+        tracks.clear();
+      },
+    },
+    artists: {
+      async list() {
+        return [...artists.values()];
+      },
+      async saveMany(items) {
+        for (const artist of items) artists.set(artist.id, artist);
+      },
+      async clear() {
+        artists.clear();
+      },
+    },
+    measuredVibes: {
+      async list() {
+        return [...measured.values()];
+      },
+      async save(item) {
+        measured.set(item.trackId, item);
+      },
+      async clear() {
+        measured.clear();
+      },
+    },
     audioBlobs: {
       async put(trackId, blob) {
         blobs.set(trackId, blob);
@@ -91,6 +132,9 @@ export function createInMemoryRepositories<TBlob = unknown>(): Repositories<TBlo
       playlists.clear();
       follows.clear();
       localTracks.clear();
+      tracks.clear();
+      artists.clear();
+      measured.clear();
       blobs.clear();
       listens = [];
     },

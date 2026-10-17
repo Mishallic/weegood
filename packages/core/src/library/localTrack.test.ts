@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { NEUTRAL_VIBE } from '../domain/vibe';
+import { NEUTRAL_VIBE, vibe } from '../domain/vibe';
 import {
   createLocalTrack,
   fileExtension,
@@ -51,7 +51,7 @@ describe('isSupportedAudioFile', () => {
 });
 
 describe('createLocalTrack', () => {
-  it('builds a track with a local source and a neutral vibe', () => {
+  it('builds a track with a local source and a neutral prior vibe', () => {
     const track = createLocalTrack({
       id: 'local_1',
       fileName: 'Demo Take.wav',
@@ -64,6 +64,9 @@ describe('createLocalTrack', () => {
     expect(track.artistName).toBe('Unknown artist');
     expect(track.durationMs).toBe(90_401);
     expect(track.vibe).toEqual(NEUTRAL_VIBE);
+    expect(track.vibeSource).toBe('prior');
+    expect(track.popularity).toBe(0);
+    expect(track.mood).toBeNull();
     expect(track.source).toEqual({
       kind: 'local',
       fileName: 'Demo Take.wav',
@@ -72,5 +75,19 @@ describe('createLocalTrack', () => {
       importedAt: 1,
     });
     expect(isLocalTrack(track)).toBe(true);
+  });
+
+  it('marks a supplied vibe as measured', () => {
+    const track = createLocalTrack({
+      id: 'local_2',
+      fileName: 'x.mp3',
+      mimeType: 'audio/mpeg',
+      sizeBytes: 1,
+      durationMs: 1000,
+      importedAt: 1,
+      vibe: vibe({ energy: 0.9 }),
+    });
+    expect(track.vibeSource).toBe('measured');
+    expect(track.vibe.energy).toBe(0.9);
   });
 });

@@ -2,7 +2,7 @@ import type { Id, Recommendation } from '../domain/types';
 import { followedIds } from '../social/follow';
 import { recommendTracks, type RecommendationInput } from './engine';
 
-export type HomeSectionId = 'for-you' | 'because-you-follow' | 'from-people' | 'fresh';
+export type HomeSectionId = 'for-you' | 'because-you-follow' | 'from-people' | 'trending' | 'fresh';
 
 export interface HomeSection {
   id: HomeSectionId;
@@ -53,29 +53,49 @@ export function buildHomeFeed(
     sections.push({
       id: 'because-you-follow',
       title: 'Because you follow',
-      subtitle: 'New from the artists and genres you follow.',
+      subtitle: 'From the artists and genres you follow.',
       items,
     });
   }
 
-  const people = input.peoplePlaylists ?? [];
+  const people = input.peopleSignals ?? [];
   if (people.length > 0) {
-    const inPlaylists = new Set<Id>();
-    for (const hit of people) for (const id of hit.playlist.trackIds) inPlaylists.add(id);
-    const candidates = input.tracks.filter((track) => inPlaylists.has(track.id));
+    const endorsed = new Set<Id>();
+    for (const signal of people) for (const id of signal.trackIds) endorsed.add(id);
+    const candidates = input.tracks.filter((track) => endorsed.has(track.id));
     const items = recommendTracks(
       { ...input, tracks: candidates },
       { limit, diversity: 0.4, excludeTrackIds: used, maxPerArtist: 3 },
     );
     take(used, items);
-    const names = [...new Set(people.map((hit) => hit.user.displayName))];
+    const names = [...new Set(people.map((signal) => signal.user.name))];
     sections.push({
       id: 'from-people',
       title: 'From people you follow',
-      subtitle: `Picked from ${listNames(names)}.`,
+      subtitle: `Reposted, loved or playlisted by ${listNames(names)}.`,
       items,
     });
   }
+
+  const trending = [...input.tracks]
+    .filter((track) => !used.has(track.id) && !input.profile.dislikedTrackIds.includes(track.id))
+    .sort((a, b) => b.popularity - a.popularity || a.id.localeCompare(b.id));
+  const trendingItems: Recommendation[] = [];
+  const trendingArtists = new Set<string>();
+  for (const track of trending) {
+    if (trendingItems.length >= limit) break;
+    const artistKey = track.artistId ?? track.artistName;
+    if (trendingArtists.has(artistKey)) continue;
+    trendingArtists.add(artistKey);
+    trendingItems.push({ track, score: track.popularity, reasons: ['Big right now'] });
+  }
+  take(used, trendingItems);
+  sections.push({
+    id: 'trending',
+    title: 'Big right now',
+    subtitle: 'What everyone is playing, no personalisation applied.',
+    items: trendingItems,
+  });
 
   const fresh = recommendTracks(input, {
     limit,

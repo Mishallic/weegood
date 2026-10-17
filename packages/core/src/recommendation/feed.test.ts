@@ -14,7 +14,6 @@ function input(overrides: Partial<RecommendationInput> = {}): RecommendationInpu
     profile: createEmptyProfile(NOW),
     tracks: DEMO_CATALOG.tracks,
     artistsById: index.artistsById,
-    genresById: index.genresById,
     follows: [],
     recentListens: [],
     now: NOW,
@@ -23,11 +22,13 @@ function input(overrides: Partial<RecommendationInput> = {}): RecommendationInpu
 }
 
 describe('buildHomeFeed', () => {
-  it('shows only "for you" and "fresh" for a listener who follows nobody', () => {
+  it('shows personal, trending and fresh rows for a listener who follows nobody', () => {
     const sections = buildHomeFeed(input());
-    expect(sections.map((s) => s.id)).toEqual(['for-you', 'fresh']);
+    expect(sections.map((s) => s.id)).toEqual(['for-you', 'trending', 'fresh']);
     const ids = sections.flatMap((s) => s.items.map((r) => r.track.id));
     expect(new Set(ids).size).toBe(ids.length);
+    const trending = sections.find((s) => s.id === 'trending');
+    expect(trending?.items[0]?.reasons).toEqual(['Big right now']);
   });
 
   it('adds a follow section limited to followed artists and genres', () => {
@@ -39,14 +40,20 @@ describe('buildHomeFeed', () => {
     for (const item of section?.items ?? []) expect(item.track.artistId).toBe('the-saltmarsh');
   });
 
-  it("adds a people section drawn from followed users' public playlists", () => {
-    const user = index.usersById.get('u-nadia');
-    const playlist = index.playlistsById.get('pl-nadia-study');
-    if (!user || !playlist) throw new Error('missing demo data');
-    const sections = buildHomeFeed(input({ peoplePlaylists: [{ user, playlist }] }));
+  it('adds a people section drawn from what followed people endorsed', () => {
+    const user = index.artistsById.get('komori-tapes');
+    const playlist = index.playlistsById.get('pl-late-study');
+    if (!user || !playlist) throw new Error('missing fixture data');
+    const sections = buildHomeFeed(
+      input({
+        peopleSignals: [
+          { user, kind: 'playlist', playlistName: playlist.name, trackIds: playlist.trackIds },
+        ],
+      }),
+    );
     const section = sections.find((s) => s.id === 'from-people');
     expect(section).toBeDefined();
-    expect(section?.subtitle).toContain('Nadia K.');
+    expect(section?.subtitle).toContain('Komori Tapes');
     for (const item of section?.items ?? []) expect(playlist.trackIds).toContain(item.track.id);
   });
 

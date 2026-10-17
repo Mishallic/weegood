@@ -46,7 +46,7 @@ export interface InferredMetadata {
 /**
  * Best-effort metadata from a file name. Handles the common shapes:
  *   "Artist - Title.mp3", "03 - Artist - Title.flac", "03. Title.wav", "Title.ogg",
- *   underscores as spaces. Reading embedded tags is a roadmap item (M1 P2).
+ *   underscores as spaces. Reading embedded tags is a roadmap item.
  */
 export function inferTrackMetadata(fileName: string): InferredMetadata {
   const base = stripExtension(fileName).replace(/_/g, ' ').replace(/\s+/g, ' ').trim();
@@ -65,7 +65,6 @@ export function inferTrackMetadata(fileName: string): InferredMetadata {
     const title = parts.slice(1).join(' - ').trim();
     if (artistName && title) return { title, artistName, trackNumber };
   }
-
   return { title: rest || fileName, artistName: null, trackNumber };
 }
 
@@ -76,7 +75,7 @@ export interface CreateLocalTrackInput {
   sizeBytes: number;
   durationMs: number;
   importedAt: number;
-  /** Optional estimate from audio analysis (ROADMAP M2). Neutral when absent. */
+  /** Measured from the audio when available (ADR 0011). Neutral when absent. */
   vibe?: VibeVector;
 }
 
@@ -88,9 +87,17 @@ export function createLocalTrack(input: CreateLocalTrackInput): Track {
     artistId: null,
     artistName: meta.artistName ?? 'Unknown artist',
     genreIds: [],
+    mood: null,
+    tags: [],
     durationMs: Math.max(0, Math.round(input.durationMs)),
     year: null,
+    artworkUrl: null,
+    popularity: 0,
+    playCount: null,
+    bpm: null,
+    musicalKey: null,
     vibe: input.vibe ?? NEUTRAL_VIBE,
+    vibeSource: input.vibe ? 'measured' : 'prior',
     source: {
       kind: 'local',
       fileName: input.fileName,

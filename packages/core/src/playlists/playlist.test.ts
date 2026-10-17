@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { DEMO_CATALOG } from '../catalog/seed';
 import {
   addTracksToPlaylist,
   createPlaylist,
@@ -13,7 +14,7 @@ import {
 const NOW = 1_800_000_000_000;
 
 describe('createPlaylist', () => {
-  it('normalises the name and de-duplicates tracks', () => {
+  it("normalises the name, de-duplicates tracks and marks it as the user's own", () => {
     const playlist = createPlaylist(
       { id: 'p1', ownerId: 'me', name: '  Late   Night  ', trackIds: ['a', 'b', 'a'] },
       NOW,
@@ -21,6 +22,8 @@ describe('createPlaylist', () => {
     expect(playlist.name).toBe('Late Night');
     expect(playlist.trackIds).toEqual(['a', 'b']);
     expect(playlist.isPublic).toBe(false);
+    expect(playlist.provider).toBeNull();
+    expect(playlist.externalId).toBeNull();
     expect(playlist.createdAt).toBe(NOW);
   });
 
@@ -63,29 +66,15 @@ describe('editing', () => {
   });
 
   it('sums durations of known tracks', () => {
-    const durations: Record<string, number> = { a: 1000, b: 2000 };
-    const total = playlistDurationMs(base, (id) =>
-      id in durations
-        ? {
-            id,
-            title: id,
-            artistId: null,
-            artistName: '',
-            genreIds: [],
-            durationMs: durations[id] ?? 0,
-            year: null,
-            vibe: {
-              energy: 0.5,
-              valence: 0.5,
-              danceability: 0.5,
-              acousticness: 0.5,
-              instrumentalness: 0.5,
-              tempo: 0.5,
-            },
-            source: { kind: 'catalog' },
-          }
-        : undefined,
+    const [first, second] = DEMO_CATALOG.tracks;
+    if (!first || !second) throw new Error('fixture too small');
+    const playlist = createPlaylist(
+      { id: 'p2', ownerId: 'me', name: 'Two', trackIds: [first.id, second.id, 'missing'] },
+      NOW,
     );
-    expect(total).toBe(3000);
+    const total = playlistDurationMs(playlist, (id) =>
+      DEMO_CATALOG.tracks.find((t) => t.id === id),
+    );
+    expect(total).toBe(first.durationMs + second.durationMs);
   });
 });
