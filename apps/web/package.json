@@ -1,6 +1,6 @@
 {
   "name": "@weegood/web",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Weegood web app: the first client, built with React and Vite.",
   "type": "module",

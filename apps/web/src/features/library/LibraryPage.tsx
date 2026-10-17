@@ -100,7 +100,7 @@ export function LibraryPage() {
           <EmptyState
             icon="playlistAdd"
             title="No playlists yet"
-            description="Create one here, or use the menu on any track. Playlists can mix demo tracks and your own files."
+            description="Create one here, or use the menu on any track. Playlists can mix streamed tracks and your own files."
             action={
               <Button variant="primary" icon="plus" onClick={openNewPlaylist}>
                 New playlist
@@ -122,7 +122,7 @@ export function LibraryPage() {
             {playlists.map((playlist) => (
               <Link
                 key={playlist.id}
-                href={`/playlist/${playlist.id}`}
+                href={`/playlist/${encodeURIComponent(playlist.id)}`}
                 className="tile"
                 style={{ '--hue': hueFor(playlist.id) } as CSSProperties}
               >
@@ -179,7 +179,7 @@ export function LibraryPage() {
         onClose={() => setPromptOpen(false)}
         onConfirm={(name) => {
           void createPlaylist(name).then((playlist) => {
-            if (playlist) navigate(`/playlist/${playlist.id}`);
+            if (playlist) navigate(`/playlist/${encodeURIComponent(playlist.id)}`);
           });
         }}
       />

@@ -1,6 +1,6 @@
 import { formatDuration, type Track } from '@weegood/core';
 import { Link } from 'wouter';
-import { useApp, usePlayer, useServices } from '../app/storesContext';
+import { useApp, usePlayer } from '../app/storesContext';
 import { cx } from '../lib/cx';
 import { trackHue } from '../lib/hue';
 import { Button } from './Button';
@@ -28,7 +28,6 @@ export function TrackRow({
   onMoveDown,
   menuDirection = 'down',
 }: TrackRowProps) {
-  const { index: catalogIndex } = useServices();
   const isCurrent = usePlayer((state) => state.currentTrackId === track.id);
   const status = usePlayer((state) => state.status);
   const togglePlay = usePlayer((state) => state.togglePlay);
@@ -53,7 +52,8 @@ export function TrackRow({
       >
         <Cover
           title={track.title}
-          hue={trackHue(track, catalogIndex.genresById)}
+          hue={trackHue(track)}
+          src={track.artworkUrl}
           size={44}
           playing={playing}
           paused={paused}
@@ -72,7 +72,7 @@ export function TrackRow({
         <span className="track-row__meta">
           {track.artistId ? (
             <Link
-              href={`/artist/${track.artistId}`}
+              href={`/artist/${encodeURIComponent(track.artistId)}`}
               className="truncate"
               onClick={(event) => event.stopPropagation()}
             >
@@ -81,10 +81,11 @@ export function TrackRow({
           ) : (
             <span className="truncate">{track.artistName}</span>
           )}
-          {track.source.kind === 'local' ? (
-            <span className="badge badge--local">local</span>
-          ) : (
-            <span className="badge">demo</span>
+          {track.source.kind === 'local' && <span className="badge badge--local">local</span>}
+          {track.vibeSource === 'measured' && (
+            <span className="badge" title="Vibe measured from the audio on this device">
+              analysed
+            </span>
           )}
           {reason && <span className="track-row__reason truncate">{reason}</span>}
         </span>

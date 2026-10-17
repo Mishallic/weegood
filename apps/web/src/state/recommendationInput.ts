@@ -1,46 +1,34 @@
-import type {
-  CatalogIndex,
-  Follow,
-  ListenEvent,
-  Playlist,
-  RecommendationInput,
-  TasteProfile,
-  Track,
-  User,
+import {
+  createEmptyProfile,
+  type Artist,
+  type Follow,
+  type Id,
+  type ListenEvent,
+  type PeopleSignal,
+  type RecommendationInput,
+  type TasteProfileV2,
+  type Track,
 } from '@weegood/core';
-import { createEmptyProfile } from '@weegood/core';
 
 export interface RecommendationSources {
-  profile: TasteProfile | null;
+  profile: TasteProfileV2 | null;
   follows: readonly Follow[];
   recentListens: readonly ListenEvent[];
   tracks: readonly Track[];
-  index: CatalogIndex;
+  artistsById: ReadonlyMap<Id, Artist>;
+  peopleSignals?: readonly PeopleSignal[];
   now: number;
 }
 
-/**
- * Assemble the engine input from app state. Public playlists of followed demo people are
- * included so "From people you follow" works before a real social graph exists.
- */
+/** Assemble the engine input from app state and a candidate pool fetched from the provider. */
 export function buildRecommendationInput(sources: RecommendationSources): RecommendationInput {
-  const peoplePlaylists: Array<{ user: User; playlist: Playlist }> = [];
-  for (const follow of sources.follows) {
-    if (follow.kind !== 'user') continue;
-    const user = sources.index.usersById.get(follow.targetId);
-    if (!user) continue;
-    for (const playlist of sources.index.playlistsByOwnerId.get(user.id) ?? []) {
-      if (playlist.isPublic) peoplePlaylists.push({ user, playlist });
-    }
-  }
   return {
     profile: sources.profile ?? createEmptyProfile(sources.now),
     tracks: sources.tracks,
-    artistsById: sources.index.artistsById,
-    genresById: sources.index.genresById,
+    artistsById: sources.artistsById,
     follows: sources.follows,
     recentListens: sources.recentListens,
-    peoplePlaylists,
+    peopleSignals: sources.peopleSignals ?? [],
     now: sources.now,
   };
 }

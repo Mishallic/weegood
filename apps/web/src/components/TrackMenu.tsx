@@ -5,6 +5,7 @@ import { useApp, usePlayer } from '../app/storesContext';
 import { Button } from './Button';
 import { PromptDialog } from './Dialog';
 import { Menu, MenuItem, MenuLabel, MenuSeparator } from './Menu';
+import { providerPageUrl } from '../lib/providerLinks';
 
 interface TrackMenuProps {
   track: Track;
@@ -13,7 +14,7 @@ interface TrackMenuProps {
   direction?: 'down' | 'up';
 }
 
-/** The "..." menu on a track: queueing, playlists, artist, feedback, deletion of local files. */
+/** The "..." menu on a track: queueing, playlists, artist, provider link, feedback, deletion of local files. */
 export function TrackMenu({ track, inPlaylistId, direction = 'down' }: TrackMenuProps) {
   const [, navigate] = useLocation();
   const playlists = useApp((state) => state.playlists);
@@ -22,14 +23,17 @@ export function TrackMenu({ track, inPlaylistId, direction = 'down' }: TrackMenu
   const createPlaylist = useApp((state) => state.createPlaylist);
   const removeFromPlaylist = useApp((state) => state.removeFromPlaylist);
   const removeLocalTrack = useApp((state) => state.removeLocalTrack);
+  const rememberTracks = useApp((state) => state.rememberTracks);
   const toggleDislike = useApp((state) => state.toggleDislike);
   const notify = useApp((state) => state.notify);
   const enqueue = usePlayer((state) => state.enqueue);
   const playNext = usePlayer((state) => state.playNext);
   const [promptOpen, setPromptOpen] = useState(false);
   const [promptKey, setPromptKey] = useState(0);
+  const externalUrl = providerPageUrl(track);
 
   const add = async (playlistId: string, name: string) => {
+    rememberTracks([track], true);
     const added = await addToPlaylist(playlistId, [track.id]);
     notify(added > 0 ? `Added to ${name}` : `Already in ${name}`);
   };
@@ -47,6 +51,7 @@ export function TrackMenu({ track, inPlaylistId, direction = 'down' }: TrackMenu
             <MenuItem
               icon="next"
               onSelect={() => {
+                rememberTracks([track]);
                 playNext(track.id);
                 notify('Playing next');
                 close();
@@ -57,6 +62,7 @@ export function TrackMenu({ track, inPlaylistId, direction = 'down' }: TrackMenu
             <MenuItem
               icon="queue"
               onSelect={() => {
+                rememberTracks([track]);
                 enqueue([track.id]);
                 notify('Added to queue');
                 close();
@@ -104,14 +110,25 @@ export function TrackMenu({ track, inPlaylistId, direction = 'down' }: TrackMenu
               <MenuItem
                 icon="person"
                 onSelect={() => {
-                  navigate(`/artist/${track.artistId}`);
+                  navigate(`/artist/${encodeURIComponent(track.artistId ?? '')}`);
                   close();
                 }}
               >
                 Go to artist
               </MenuItem>
             )}
-            {track.source.kind === 'catalog' && (
+            {externalUrl && (
+              <MenuItem
+                icon="explore"
+                onSelect={() => {
+                  window.open(externalUrl, '_blank', 'noopener,noreferrer');
+                  close();
+                }}
+              >
+                Open on Audius
+              </MenuItem>
+            )}
+            {track.source.kind === 'stream' && (
               <MenuItem
                 icon="thumbDown"
                 onSelect={() => {
@@ -149,6 +166,7 @@ export function TrackMenu({ track, inPlaylistId, direction = 'down' }: TrackMenu
         confirmLabel="Create"
         onClose={() => setPromptOpen(false)}
         onConfirm={(name) => {
+          rememberTracks([track], true);
           void createPlaylist(name, [track.id]).then((playlist) => {
             if (playlist) notify(`Created ${playlist.name}`);
           });

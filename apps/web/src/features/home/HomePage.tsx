@@ -2,19 +2,23 @@ import {
   buildHomeFeed,
   createEmptyProfile,
   describeVibe,
+  genreById,
   NEUTRAL_VIBE,
   recommendArtists,
   topGenreIds,
+  type Artist,
 } from '@weegood/core';
 import { useMemo, useState } from 'react';
 import { Link } from 'wouter';
-import { useApp, usePlayer, useServices } from '../../app/storesContext';
+import { useApp, useServices } from '../../app/storesContext';
 import { ArtistCard } from '../../components/ArtistCard';
+import { AsyncState } from '../../components/AsyncState';
 import { Button } from '../../components/Button';
 import { Chip } from '../../components/Chip';
 import { Icon } from '../../components/Icon';
 import { Section } from '../../components/Section';
-import { TrackCard } from '../../components/TrackCard';
+import { TrackCards } from '../../components/TrackCards';
+import { useHomeCandidates } from '../../hooks/useHomeCandidates';
 import { useRecommendationInput } from '../../hooks/useRecommendationInput';
 import { greetingForHour } from '../../lib/format';
 import { isDefined } from '../../lib/isDefined';
@@ -26,27 +30,47 @@ export function HomePage() {
 
 /**
  * The feed is computed from a snapshot of the profile and history taken when the page mounts, so
- * rows do not reshuffle while you listen. Follows are live, because following is a deliberate act
- * whose effect you want to see. Refresh re-snapshots.
+ * rows do not reshuffle while you listen. Follows stay live, because following is a deliberate act
+ * whose effect you want to see. Refresh re-snapshots and refetches.
  */
 function HomeFeed({ onRefresh }: { onRefresh: () => void }) {
-  const { catalog, index } = useServices();
+  const { music } = useServices();
   const liveProfile = useApp((state) => state.profile);
   const liveListens = useApp((state) => state.recentListens);
   const localTrackCount = useApp((state) => state.localTracks.length);
   const dislikedIds = useApp((state) => state.profile?.dislikedTrackIds ?? []);
-  const playQueue = usePlayer((state) => state.playQueue);
+  const knownArtists = useApp((state) => state.artists);
 
+  const candidates = useHomeCandidates();
   const [profile] = useState(liveProfile);
   const [recentListens] = useState(liveListens);
-  const input = useRecommendationInput({ profile, recentListens });
+  const input = useRecommendationInput({
+    tracks: candidates.tracks,
+    peopleSignals: candidates.peopleSignals,
+    profile,
+    recentListens,
+  });
 
-  const feed = useMemo(() => buildHomeFeed(input, { perSection: 12 }), [input]);
-  const artists = useMemo(() => recommendArtists(input, catalog.artists, 6), [input, catalog]);
+  const feed = useMemo(
+    () => (candidates.tracks.length > 0 ? buildHomeFeed(input, { perSection: 12 }) : []),
+    [input, candidates.tracks.length],
+  );
+
+  const artistPool = useMemo(() => {
+    const seen = new Map<string, Artist>();
+    for (const track of candidates.tracks) {
+      if (!track.artistId || seen.has(track.artistId)) continue;
+      const artist = music.cachedArtist(track.artistId) ?? knownArtists[track.artistId];
+      if (artist) seen.set(artist.id, artist);
+    }
+    return [...seen.values()];
+  }, [candidates.tracks, music, knownArtists]);
+
+  const artists = useMemo(() => recommendArtists(input, artistPool, 6), [input, artistPool]);
 
   const vibeWords = describeVibe(liveProfile?.vibe ?? NEUTRAL_VIBE, 3);
   const topGenres = topGenreIds(liveProfile ?? createEmptyProfile(0), 3)
-    .map((id) => index.genresById.get(id))
+    .map((id) => genreById(id))
     .filter(isDefined);
   const disliked = new Set(dislikedIds);
 
@@ -68,7 +92,14 @@ function HomeFeed({ onRefresh }: { onRefresh: () => void }) {
             </div>
           )}
         </div>
-        <Button variant="ghost" icon="refresh" onClick={onRefresh}>
+        <Button
+          variant="ghost"
+          icon="refresh"
+          onClick={() => {
+            candidates.refresh();
+            onRefresh();
+          }}
+        >
           Refresh
         </Button>
       </header>
@@ -83,34 +114,37 @@ function HomeFeed({ onRefresh }: { onRefresh: () => void }) {
         </div>
       )}
 
-      {feed.map((section) => {
-        const items = section.items.filter((item) => !disliked.has(item.track.id));
-        if (items.length === 0) return null;
-        const ids = items.map((item) => item.track.id);
-        return (
-          <Section key={section.id} title={section.title} subtitle={section.subtitle}>
-            <div className="scroller">
-              {items.map((item, i) => (
-                <TrackCard
-                  key={item.track.id}
-                  recommendation={item}
-                  onPlay={() => void playQueue(ids, i, section.title)}
-                />
+      <AsyncState
+        loading={candidates.loading}
+        error={candidates.error}
+        empty={feed.length === 0}
+        loadingMessage="Pulling what is playing right now on Audius..."
+        emptyMessage="Nothing to show yet. Follow a few genres or artists and come back."
+        onRetry={candidates.refresh}
+      >
+        {feed.map((section) => {
+          const items = section.items.filter((item) => !disliked.has(item.track.id));
+          if (items.length === 0) return null;
+          return (
+            <Section key={section.id} title={section.title} subtitle={section.subtitle}>
+              <TrackCards items={items} contextLabel={section.title} />
+            </Section>
+          );
+        })}
+
+        {artists.length > 0 && (
+          <Section
+            title="Artists to follow"
+            subtitle="Following shapes your feed and brings in what they repost."
+          >
+            <div className="grid grid--wide">
+              {artists.map(({ artist, reasons }) => (
+                <ArtistCard key={artist.id} artist={artist} reason={reasons[0]} />
               ))}
             </div>
           </Section>
-        );
-      })}
-
-      {artists.length > 0 && (
-        <Section title="Artists to follow" subtitle="Following shapes your feed.">
-          <div className="grid grid--wide">
-            {artists.map(({ artist, reasons }) => (
-              <ArtistCard key={artist.id} artist={artist} reason={reasons[0]} />
-            ))}
-          </div>
-        </Section>
-      )}
+        )}
+      </AsyncState>
     </div>
   );
 }

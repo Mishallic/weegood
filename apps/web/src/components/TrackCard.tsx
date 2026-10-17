@@ -1,5 +1,5 @@
 import type { Recommendation } from '@weegood/core';
-import { usePlayer, useServices } from '../app/storesContext';
+import { usePlayer } from '../app/storesContext';
 import { trackHue } from '../lib/hue';
 import { Button } from './Button';
 import { Cover } from './Cover';
@@ -9,9 +9,8 @@ interface TrackCardProps {
   onPlay: () => void;
 }
 
-/** A square card for feed rows: cover, title, artist and the reason it was picked. */
+/** A square card for feed rows: artwork, title, artist and the reason it was picked. */
 export function TrackCard({ recommendation, onPlay }: TrackCardProps) {
-  const { index } = useServices();
   const { track, reasons } = recommendation;
   const isCurrent = usePlayer((state) => state.currentTrackId === track.id);
   const status = usePlayer((state) => state.status);
@@ -22,7 +21,8 @@ export function TrackCard({ recommendation, onPlay }: TrackCardProps) {
     <div className="track-card">
       <Cover
         title={track.title}
-        hue={trackHue(track, index.genresById)}
+        hue={trackHue(track)}
+        src={track.artworkUrl}
         size="100%"
         playing={playing}
         paused={isCurrent && !playing}

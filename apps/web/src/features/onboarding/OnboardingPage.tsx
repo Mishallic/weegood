@@ -1,16 +1,21 @@
 import {
+  FEATURED_GENRES,
+  GENRES,
+  genreById,
   LISTENING_CONTEXTS,
   MOODS,
   describeVibe,
+  type Artist,
   type ListeningContext,
   type OnboardingAnswers,
 } from '@weegood/core';
-import { useMemo, useState, type CSSProperties } from 'react';
+import { useCallback, useMemo, useState, type CSSProperties } from 'react';
 import { useLocation } from 'wouter';
 import { useApp, useServices } from '../../app/storesContext';
+import { Avatar } from '../../components/Avatar';
 import { Button } from '../../components/Button';
-import { Cover } from '../../components/Cover';
 import { Icon } from '../../components/Icon';
+import { useQuery } from '../../hooks/useQuery';
 import { hueFor } from '../../lib/hue';
 
 const STEPS = ['welcome', 'genres', 'moods', 'artists', 'context'] as const;
@@ -28,15 +33,17 @@ function toggleIn(list: readonly string[], id: string, max: number): string[] {
   return [...list, id];
 }
 
-/** Four questions, under a minute (ADR 0009). Re-runnable from settings with answers prefilled. */
+/** Four questions, under a minute (ADR 0009). Artists are real, pulled live for the chosen genres. */
 export function OnboardingPage() {
-  const { catalog, index } = useServices();
+  const { music } = useServices();
   const existing = useApp((state) => state.profile?.onboarding ?? null);
   const hasProfile = useApp((state) => state.profile !== null);
+  const knownArtists = useApp((state) => state.artists);
   const completeOnboarding = useApp((state) => state.completeOnboarding);
   const [, navigate] = useLocation();
 
   const [stepIndex, setStepIndex] = useState(0);
+  const [showAllGenres, setShowAllGenres] = useState(false);
   const [genreIds, setGenreIds] = useState<string[]>(existing?.genreIds ?? []);
   const [moodIds, setMoodIds] = useState<string[]>(existing?.moodIds ?? []);
   const [artistIds, setArtistIds] = useState<string[]>(existing?.artistIds ?? []);
@@ -44,14 +51,32 @@ export function OnboardingPage() {
   const [saving, setSaving] = useState(false);
   const step: Step = STEPS[stepIndex] ?? 'welcome';
 
-  const artistChoices = useMemo(() => {
-    const chosen = new Set(genreIds);
-    const inGenres = catalog.artists.filter((artist) =>
-      artist.genreIds.some((id) => chosen.has(id)),
+  const sortedGenres = useMemo(() => [...genreIds].sort(), [genreIds]);
+  const artistKey = stepIndex >= 3 ? `onboarding-artists:${sortedGenres.join(',')}` : null;
+  const fetchArtists = useCallback(async (): Promise<Artist[]> => {
+    const lists = await Promise.all(
+      sortedGenres.map((genreId) =>
+        music.trending({ genreId, window: 'month', limit: 40 }).catch(() => []),
+      ),
     );
-    const pool = inGenres.length >= 6 ? inGenres : catalog.artists;
-    return [...pool].sort((a, b) => b.followerCount - a.followerCount).slice(0, ARTIST_CHOICES);
-  }, [catalog, genreIds]);
+    const byArtist = new Map<string, { artist: Artist; hits: number }>();
+    for (const list of lists) {
+      for (const track of list) {
+        if (!track.artistId) continue;
+        const known = music.cachedArtist(track.artistId);
+        if (!known) continue;
+        const entry = byArtist.get(known.id);
+        if (entry) entry.hits++;
+        else byArtist.set(known.id, { artist: known, hits: 1 });
+      }
+    }
+    return [...byArtist.values()]
+      .sort((a, b) => b.hits - a.hits || b.artist.followerCount - a.artist.followerCount)
+      .slice(0, ARTIST_CHOICES)
+      .map((entry) => entry.artist);
+  }, [music, sortedGenres]);
+  const artistQuery = useQuery<Artist[]>(artistKey, fetchArtists, { ttlMs: 30 * 60_000 });
+  const artistChoices = artistQuery.data ?? [];
 
   const canContinue =
     step === 'genres'
@@ -72,13 +97,18 @@ export function OnboardingPage() {
   const finish = async () => {
     setSaving(true);
     const answers: OnboardingAnswers = { genreIds, moodIds, artistIds, context };
+    const chosen = artistIds
+      .map((id) => artistChoices.find((artist) => artist.id === id) ?? knownArtists[id])
+      .filter((artist): artist is Artist => artist !== undefined);
     try {
-      await completeOnboarding(answers);
+      await completeOnboarding(answers, chosen);
       navigate('/');
     } finally {
       setSaving(false);
     }
   };
+
+  const genreList = showAllGenres ? GENRES : FEATURED_GENRES;
 
   return (
     <div className="onboarding">
@@ -97,14 +127,16 @@ export function OnboardingPage() {
           <div className="stack">
             <h1>Let&apos;s find your vibe.</h1>
             <p className="muted">
-              Four quick questions, under a minute. Weegood uses them to start recommending music
-              that fits how you actually listen, and explains every pick.
+              Four quick questions, under a minute. Weegood streams real, full-length music from
+              Audius, an open music network, and recommends from what you actually play, with a
+              reason for every pick.
             </p>
             <div className="callout">
               <Icon name="info" />
               <span>
-                Your answers stay on this device. Weegood has no servers and sends nothing anywhere.
-                You can export or reset your profile any time from Settings.
+                Your taste profile stays on this device. Weegood has no accounts and sends nothing
+                but anonymous music requests to the music network. You can export or reset your
+                profile from Settings.
               </span>
             </div>
           </div>
@@ -117,7 +149,7 @@ export function OnboardingPage() {
               Pick {GENRE_MIN} to {GENRE_MAX}.
             </p>
             <div className="option-grid">
-              {catalog.genres.map((genre) => {
+              {genreList.map((genre) => {
                 const pressed = genreIds.includes(genre.id);
                 return (
                   <button
@@ -134,6 +166,11 @@ export function OnboardingPage() {
                   </button>
                 );
               })}
+            </div>
+            <div>
+              <Button variant="ghost" size="sm" onClick={() => setShowAllGenres((value) => !value)}>
+                {showAllGenres ? 'Show fewer genres' : `Show all ${GENRES.length} genres`}
+              </Button>
             </div>
           </div>
         )}
@@ -169,28 +206,45 @@ export function OnboardingPage() {
 
         {step === 'artists' && (
           <div className="stack">
-            <h1>Anyone you already love?</h1>
-            <p className="muted">Optional. Based on the genres you picked.</p>
+            <h1>Anyone you already like?</h1>
+            <p className="muted">Optional. Artists trending right now in the genres you picked.</p>
+            {artistQuery.loading && artistChoices.length === 0 && (
+              <p className="muted small">Finding artists on Audius...</p>
+            )}
+            {artistQuery.error && artistChoices.length === 0 && (
+              <div className="callout">
+                <Icon name="info" />
+                <span>
+                  Could not reach Audius. You can skip this step.{' '}
+                  <Button size="sm" variant="ghost" onClick={artistQuery.refresh}>
+                    Try again
+                  </Button>
+                </span>
+              </div>
+            )}
             <div className="option-grid">
               {artistChoices.map((artist) => {
                 const pressed = artistIds.includes(artist.id);
-                const genre = index.genresById.get(artist.genreIds[0] ?? '');
+                const hue = genreById(artist.genreIds[0] ?? '')?.hue ?? hueFor(artist.id);
                 return (
                   <button
                     key={artist.id}
                     type="button"
                     className="option option--artist"
-                    style={{ '--hue': genre?.hue ?? hueFor(artist.id) } as CSSProperties}
+                    style={{ '--hue': hue } as CSSProperties}
                     aria-pressed={pressed}
                     onClick={() =>
                       setArtistIds((list) => toggleIn(list, artist.id, ARTIST_CHOICES))
                     }
                   >
-                    <Cover title={artist.name} hue={genre?.hue ?? hueFor(artist.id)} size={40} />
+                    <Avatar name={artist.name} hue={hue} src={artist.avatarUrl} size={40} />
                     <span className="stack" style={{ gap: 0, minWidth: 0 }}>
                       <span className="option__title truncate">{artist.name}</span>
                       <span className="option__desc truncate">
-                        {artist.genreIds.map((id) => index.genresById.get(id)?.name).join(', ')}
+                        {artist.genreIds
+                          .map((id) => genreById(id)?.name)
+                          .filter(Boolean)
+                          .join(', ') || 'Audius'}
                       </span>
                     </span>
                   </button>

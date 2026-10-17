@@ -11,7 +11,6 @@ import { LibraryPage } from '../features/library/LibraryPage';
 import { PlaylistPage } from '../features/library/PlaylistPage';
 import { OnboardingPage } from '../features/onboarding/OnboardingPage';
 import { PeoplePage } from '../features/people/PeoplePage';
-import { UserPage } from '../features/people/UserPage';
 import { SearchPage } from '../features/search/SearchPage';
 import { SettingsPage } from '../features/settings/SettingsPage';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
@@ -54,7 +53,6 @@ function Shell() {
         <Route path="/library" component={LibraryPage} />
         <Route path="/playlist/:id" component={PlaylistPage} />
         <Route path="/people" component={PeoplePage} />
-        <Route path="/u/:handle" component={UserPage} />
         <Route path="/search" component={SearchPage} />
         <Route path="/settings" component={SettingsPage} />
         <Route>

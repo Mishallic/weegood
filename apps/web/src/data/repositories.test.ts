@@ -1,4 +1,4 @@
-import { createEmptyProfile, createLocalTrack, createPlaylist } from '@weegood/core';
+import { createEmptyProfile, createLocalTrack, createPlaylist, DEMO_CATALOG } from '@weegood/core';
 import { describe, expect, it } from 'vitest';
 import { openWeegoodDB } from './db';
 import { createIndexedDbRepositories } from './repositories';
@@ -16,7 +16,7 @@ describe('IndexedDB repositories', () => {
     const repos = freshRepos();
     expect(await repos.profile.get()).toBeNull();
     await repos.profile.save(createEmptyProfile(NOW));
-    expect((await repos.profile.get())?.createdAt).toBe(NOW);
+    expect((await repos.profile.get()) as { createdAt: number }).toMatchObject({ createdAt: NOW });
     await repos.profile.clear();
     expect(await repos.profile.get()).toBeNull();
   });
@@ -60,6 +60,43 @@ describe('IndexedDB repositories', () => {
     expect(await repos.audioBlobs.get('local_1')).toBeUndefined();
   });
 
+  it('caches streamed tracks, artists and measured vibes', async () => {
+    const repos = freshRepos();
+    const tracks = DEMO_CATALOG.tracks.slice(0, 4);
+    await repos.tracks.saveMany(tracks);
+    await repos.tracks.saveMany(tracks.slice(0, 1));
+    expect(await repos.tracks.list()).toHaveLength(4);
+    await repos.tracks.remove(tracks[0]?.id ?? '');
+    expect(await repos.tracks.list()).toHaveLength(3);
+
+    await repos.artists.saveMany(DEMO_CATALOG.artists.slice(0, 2));
+    expect((await repos.artists.list()).map((a) => a.id).sort()).toEqual(
+      DEMO_CATALOG.artists
+        .slice(0, 2)
+        .map((a) => a.id)
+        .sort(),
+    );
+
+    const first = tracks[1];
+    if (!first) throw new Error('fixture too small');
+    await repos.measuredVibes.save({
+      trackId: first.id,
+      vibe: first.vibe,
+      features: {
+        rmsDb: -12,
+        spectralCentroidHz: 1800,
+        bassRatio: 0.25,
+        spectralFlatness: 0.2,
+        tempoBpm: 124,
+        beatStrength: 0.6,
+        majorness: 0.4,
+        durationSeconds: 45,
+      },
+      measuredAt: NOW,
+    });
+    expect((await repos.measuredVibes.list())[0]?.features.tempoBpm).toBe(124);
+  });
+
   it('returns recent listens newest first and clears everything', async () => {
     const repos = freshRepos();
     for (let i = 0; i < 5; i++) {
@@ -76,8 +113,10 @@ describe('IndexedDB repositories', () => {
     expect(recent.map((e) => e.trackId)).toEqual(['t4', 't3', 't2']);
 
     await repos.profile.save(createEmptyProfile(NOW));
+    await repos.tracks.saveMany(DEMO_CATALOG.tracks.slice(0, 2));
     await repos.clearAll();
     expect(await repos.profile.get()).toBeNull();
+    expect(await repos.tracks.list()).toEqual([]);
     expect(await repos.listens.recent(10)).toEqual([]);
   });
 });

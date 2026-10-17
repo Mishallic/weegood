@@ -1,6 +1,13 @@
 import type { CSSProperties } from 'react';
 
-export function Avatar({ name, hue, size = 40 }: { name: string; hue: number; size?: number }) {
+interface AvatarProps {
+  name: string;
+  hue: number;
+  src?: string | null | undefined;
+  size?: number;
+}
+
+export function Avatar({ name, hue, src, size = 40 }: AvatarProps) {
   const initials = name
     .split(/\s+/)
     .map((part) => part[0] ?? '')
@@ -13,7 +20,11 @@ export function Avatar({ name, hue, size = 40 }: { name: string; hue: number; si
       style={{ '--hue': hue, '--size': `${size}px` } as CSSProperties}
       aria-hidden="true"
     >
-      {initials}
+      {src ? (
+        <img className="avatar__img" src={src} alt="" loading="lazy" decoding="async" />
+      ) : (
+        initials
+      )}
     </span>
   );
 }

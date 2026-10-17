@@ -1,15 +1,17 @@
 import {
   createEmptyProfile,
   describeVibe,
+  genreById,
   NEUTRAL_VIBE,
   pluralize,
   topGenreIds,
+  topMoods,
   VIBE_DIMENSIONS,
   type VibeDimension,
 } from '@weegood/core';
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { useLocation } from 'wouter';
-import { useApp, useServices } from '../../app/storesContext';
+import { useApp } from '../../app/storesContext';
 import { Button } from '../../components/Button';
 import { Chip } from '../../components/Chip';
 import { ConfirmDialog } from '../../components/Dialog';
@@ -27,12 +29,13 @@ const DIMENSION_LABELS: Record<VibeDimension, string> = {
 };
 
 export function SettingsPage() {
-  const { index } = useServices();
   const profile = useApp((state) => state.profile);
   const theme = useApp((state) => state.theme);
   const follows = useApp((state) => state.follows);
   const playlists = useApp((state) => state.playlists);
   const localTracks = useApp((state) => state.localTracks);
+  const measuredCount = useApp((state) => Object.keys(state.measured).length);
+  const cachedCount = useApp((state) => Object.keys(state.tracks).length);
   const setTheme = useApp((state) => state.setTheme);
   const exportData = useApp((state) => state.exportData);
   const importData = useApp((state) => state.importData);
@@ -51,9 +54,8 @@ export function SettingsPage() {
     storage
       .estimate()
       .then((estimate) => {
-        if (!cancelled && estimate.usage !== undefined) {
+        if (!cancelled && estimate.usage !== undefined)
           setUsage({ usage: estimate.usage, quota: estimate.quota });
-        }
       })
       .catch(() => undefined);
     return () => {
@@ -64,8 +66,9 @@ export function SettingsPage() {
   const vibe = profile?.vibe ?? NEUTRAL_VIBE;
   const words = describeVibe(vibe, 3);
   const topGenres = topGenreIds(profile ?? createEmptyProfile(0), 5)
-    .map((id) => index.genresById.get(id))
+    .map((id) => genreById(id))
     .filter(isDefined);
+  const moods = topMoods(profile ?? createEmptyProfile(0), 4);
 
   const onExport = async () => {
     const bundle = await exportData();
@@ -138,12 +141,23 @@ export function SettingsPage() {
                 ))}
               </div>
             )}
+            {moods.length > 0 && (
+              <p className="muted small">Moods you lean toward: {moods.join(', ')}.</p>
+            )}
             <div className="row" style={{ gap: 32, flexWrap: 'wrap' }}>
               <Stat label="Listens" value={profile.listenCount} />
               <Stat label="Liked" value={profile.likedTrackIds.length} />
               <Stat label="Following" value={follows.length} />
               <Stat label="Playlists" value={playlists.length} />
+              <Stat label="Ranker updates" value={profile.ranker.updates} />
             </div>
+            <p className="muted small">
+              The ranking model has learned from {pluralize(profile.ranker.updates, 'play')}. It
+              weighs vibe match at {profile.ranker.weights.vibe.toFixed(2)}, genre at{' '}
+              {profile.ranker.weights.genre.toFixed(2)}, popularity at{' '}
+              {profile.ranker.weights.popularity.toFixed(2)}, and it moves a little every time you
+              finish or skip something.
+            </p>
             <div className="row">
               <Button icon="refresh" onClick={() => navigate('/onboarding')}>
                 Redo onboarding
@@ -153,6 +167,24 @@ export function SettingsPage() {
         ) : (
           <p className="muted">No profile yet.</p>
         )}
+      </section>
+
+      <section className="card stack">
+        <h2>Music source and analysis</h2>
+        <p className="muted small">
+          Music streams from Audius, an open network where artists publish directly. Nothing is
+          cached on disk beyond track metadata, and every track links back to its page on Audius.
+        </p>
+        <div className="row" style={{ gap: 32, flexWrap: 'wrap' }}>
+          <Stat label="Tracks known" value={cachedCount} />
+          <Stat label="Analysed on device" value={measuredCount} />
+          <Stat label="Imported files" value={localTracks.length} />
+        </div>
+        <p className="muted small">
+          When a track plays for the first time, Weegood measures its loudness, brightness, bass,
+          tempo, beat strength and key from the first 45 seconds, right here in your browser, and
+          refines the vibe it was recommended on.
+        </p>
       </section>
 
       <section className="card">
@@ -185,7 +217,7 @@ export function SettingsPage() {
           <div>
             <div>Export</div>
             <div className="muted small">
-              Profile, playlists, follows and listening history as JSON.
+              Profile, playlists, follows, referenced tracks and listening history as JSON.
             </div>
           </div>
           <Button icon="download" onClick={() => void onExport()}>
@@ -241,8 +273,8 @@ export function SettingsPage() {
       <section className="card stack">
         <h2>About</h2>
         <p className="muted small">
-          Weegood 0.1.0, pre-alpha. The catalog is a fictional demo with synthesised previews so you
-          can try the whole product without licensing. Your own files play for real.
+          Weegood 0.2.0, pre-alpha. Real music from Audius, a taste model that lives on your device,
+          your own files alongside.
         </p>
         <p className="muted small">
           Shortcuts: Space or K play/pause · J and L seek · N and P next/previous · M mute · /

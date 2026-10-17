@@ -74,6 +74,59 @@ export function createIndexedDbRepositories(
       },
     },
 
+    tracks: {
+      async list() {
+        const db = await dbPromise;
+        return db.getAll('tracks');
+      },
+      async saveMany(tracks) {
+        if (tracks.length === 0) return;
+        const db = await dbPromise;
+        const tx = db.transaction('tracks', 'readwrite');
+        await Promise.all([...tracks.map((track) => tx.store.put(track)), tx.done]);
+      },
+      async remove(id) {
+        const db = await dbPromise;
+        await db.delete('tracks', id);
+      },
+      async clear() {
+        const db = await dbPromise;
+        await db.clear('tracks');
+      },
+    },
+
+    artists: {
+      async list() {
+        const db = await dbPromise;
+        return db.getAll('artists');
+      },
+      async saveMany(artists) {
+        if (artists.length === 0) return;
+        const db = await dbPromise;
+        const tx = db.transaction('artists', 'readwrite');
+        await Promise.all([...artists.map((artist) => tx.store.put(artist)), tx.done]);
+      },
+      async clear() {
+        const db = await dbPromise;
+        await db.clear('artists');
+      },
+    },
+
+    measuredVibes: {
+      async list() {
+        const db = await dbPromise;
+        return db.getAll('measuredVibes');
+      },
+      async save(measured) {
+        const db = await dbPromise;
+        await db.put('measuredVibes', measured);
+      },
+      async clear() {
+        const db = await dbPromise;
+        await db.clear('measuredVibes');
+      },
+    },
+
     audioBlobs: {
       async put(trackId, blob) {
         const db = await dbPromise;
@@ -127,19 +180,19 @@ export function createIndexedDbRepositories(
 
     async clearAll() {
       const db = await dbPromise;
-      const tx = db.transaction(
-        ['profile', 'playlists', 'follows', 'localTracks', 'audioBlobs', 'listens'],
-        'readwrite',
-      );
-      await Promise.all([
-        tx.objectStore('profile').clear(),
-        tx.objectStore('playlists').clear(),
-        tx.objectStore('follows').clear(),
-        tx.objectStore('localTracks').clear(),
-        tx.objectStore('audioBlobs').clear(),
-        tx.objectStore('listens').clear(),
-        tx.done,
-      ]);
+      const stores = [
+        'profile',
+        'playlists',
+        'follows',
+        'localTracks',
+        'tracks',
+        'artists',
+        'measuredVibes',
+        'audioBlobs',
+        'listens',
+      ] as const;
+      const tx = db.transaction(stores, 'readwrite');
+      await Promise.all([...stores.map((store) => tx.objectStore(store).clear()), tx.done]);
     },
   };
 }

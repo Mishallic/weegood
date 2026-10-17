@@ -1448,3 +1448,19 @@ dialog.dialog::backdrop {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ------------------------------------------------------------------ artwork */
+.cover__img,
+.avatar__img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+}
+
+.avatar {
+  position: relative;
+  overflow: hidden;
+}

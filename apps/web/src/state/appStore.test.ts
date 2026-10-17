@@ -1,4 +1,4 @@
-import { createCatalogIndex, DEMO_CATALOG } from '@weegood/core';
+import { createCatalogIndex, createEmptyProfile, DEMO_CATALOG, emptyFeatures } from '@weegood/core';
 import { describe, expect, it } from 'vitest';
 import { createTestServices } from '../app/services';
 import { createAppStore } from './appStore';
@@ -12,11 +12,24 @@ function track(id: string) {
   return found;
 }
 
+function artist(id: string) {
+  const found = index.artistsById.get(id);
+  if (!found) throw new Error(`missing ${id}`);
+  return found;
+}
+
 function setup() {
   const services = createTestServices({ now: () => NOW });
   const store = createAppStore(services);
   return { services, store };
 }
+
+const ONBOARDING = {
+  genreIds: ['lo-fi'],
+  moodIds: ['chill'],
+  artistIds: [] as string[],
+  context: 'focus' as const,
+};
 
 describe('appStore', () => {
   it('hydrates to an empty state for a new visitor', async () => {
@@ -28,27 +41,88 @@ describe('appStore', () => {
     expect(store.getState().playlists).toEqual([]);
   });
 
-  it('persists the onboarding profile and keeps likes when re-run', async () => {
+  it('upgrades a version 1 profile on hydrate', async () => {
+    const { store, services } = setup();
+    const v1 = { ...createEmptyProfile(NOW), version: 1 } as unknown as Record<string, unknown>;
+    delete v1['moodWeights'];
+    delete v1['ranker'];
+    await services.repos.profile.save(v1 as never);
+    await store.getState().hydrate();
+    expect(store.getState().profile?.version).toBe(2);
+    expect(store.getState().profile?.ranker.updates).toBe(0);
+  });
+
+  it('persists the onboarding profile with chosen artists and keeps likes when re-run', async () => {
     const { store, services } = setup();
     await store.getState().hydrate();
-    await store.getState().completeOnboarding({
-      genreIds: ['lofi'],
-      moodIds: ['chill'],
-      artistIds: [],
-      context: 'focus',
-    });
-    expect((await services.repos.profile.get())?.genreWeights['lofi']).toBe(1);
+    const chosen = artist('paper-lanterns');
+    await store.getState().completeOnboarding({ ...ONBOARDING, artistIds: [chosen.id] }, [chosen]);
+    const stored = (await services.repos.profile.get()) as {
+      genreWeights: Record<string, number>;
+      artistAffinity: Record<string, number>;
+    };
+    expect(stored.genreWeights['lo-fi']).toBe(1);
+    expect(stored.artistAffinity[chosen.id]).toBe(1);
+    expect(store.getState().artists[chosen.id]).toBeDefined();
 
     await store.getState().toggleLike(track('paper-lanterns-1'));
-    await store.getState().completeOnboarding({
-      genreIds: ['metal'],
-      moodIds: ['dark'],
-      artistIds: [],
-      context: 'workout',
-    });
+    await store
+      .getState()
+      .completeOnboarding(
+        { genreIds: ['metal'], moodIds: ['dark'], artistIds: [], context: 'workout' },
+        [],
+      );
     const profile = store.getState().profile;
     expect(profile?.genreWeights['metal']).toBe(1);
     expect(profile?.likedTrackIds).toEqual(['paper-lanterns-1']);
+  });
+
+  it('caches streamed tracks and fetches missing ones from the provider', async () => {
+    const { store, services } = setup();
+    await store.getState().hydrate();
+    expect(store.getState().getTrack('lux-marlowe-1')).toBeUndefined();
+    const resolved = await store
+      .getState()
+      .ensureTracks(['lux-marlowe-1', 'nope', 'lux-marlowe-2']);
+    expect(resolved.map((t) => t.id)).toEqual(['lux-marlowe-1', 'lux-marlowe-2']);
+    expect((await services.repos.tracks.list()).map((t) => t.id).sort()).toEqual([
+      'lux-marlowe-1',
+      'lux-marlowe-2',
+    ]);
+
+    store.getState().rememberTracks([track('ironwake-1')]);
+    expect(store.getState().getTrack('ironwake-1')).toBeDefined();
+    expect((await services.repos.tracks.list()).length).toBe(2);
+  });
+
+  it('applies measured vibes to cached tracks and persists them', async () => {
+    const { store, services } = setup();
+    await store.getState().hydrate();
+    const target = track('delphine-rey-1');
+    store.getState().rememberTracks([target], true);
+    const measured = {
+      trackId: target.id,
+      vibe: { ...target.vibe, energy: 0.99 },
+      features: {
+        rmsDb: -8,
+        spectralCentroidHz: 2500,
+        bassRatio: 0.3,
+        spectralFlatness: 0.3,
+        tempoBpm: 126,
+        beatStrength: 0.8,
+        majorness: 0.7,
+        durationSeconds: 45,
+      },
+      measuredAt: NOW,
+    };
+    await store.getState().recordMeasuredVibe(measured);
+    expect(store.getState().getTrack(target.id)?.vibe.energy).toBe(0.99);
+    expect(store.getState().getTrack(target.id)?.vibeSource).toBe('measured');
+    expect(await services.repos.measuredVibes.list()).toHaveLength(1);
+
+    const fresh = createAppStore(services);
+    await fresh.getState().hydrate();
+    expect(fresh.getState().getTrack(target.id)?.vibeSource).toBe('measured');
   });
 
   it('manages playlists and persists every change', async () => {
@@ -81,44 +155,52 @@ describe('appStore', () => {
     expect(store.getState().toasts[0]?.kind).toBe('error');
   });
 
-  it('toggles follows, persists them and nudges the profile', async () => {
+  it('toggles follows, caches the artist and nudges the profile', async () => {
     const { store, services } = setup();
     await store.getState().hydrate();
-    await store.getState().completeOnboarding({
-      genreIds: ['pop'],
-      moodIds: ['feel-good'],
-      artistIds: [],
-      context: 'everything',
-    });
-    expect(await store.getState().toggleFollow('artist', 'ironwake')).toBe(true);
+    await store
+      .getState()
+      .completeOnboarding(
+        { genreIds: ['pop'], moodIds: ['feel-good'], artistIds: [], context: 'everything' },
+        [],
+      );
+    const ironwake = artist('ironwake');
+    expect(await store.getState().toggleFollow('artist', ironwake.id, ironwake)).toBe(true);
     expect(await services.repos.follows.list()).toHaveLength(1);
-    expect(store.getState().profile?.artistAffinity['ironwake']).toBeGreaterThan(0);
-    expect(await store.getState().toggleFollow('artist', 'ironwake')).toBe(false);
+    expect((await services.repos.artists.list()).map((a) => a.id)).toEqual([ironwake.id]);
+    expect(store.getState().profile?.artistAffinity[ironwake.id]).toBeGreaterThan(0);
+    expect(await store.getState().toggleFollow('artist', ironwake.id)).toBe(false);
     expect(await services.repos.follows.list()).toHaveLength(0);
   });
 
-  it('records listens into history and the profile', async () => {
+  it('records listens into history, the profile and the ranker', async () => {
     const { store, services } = setup();
     await store.getState().hydrate();
-    await store.getState().completeOnboarding({
-      genreIds: ['jazz'],
-      moodIds: ['chill'],
-      artistIds: [],
-      context: 'relax',
-    });
+    await store
+      .getState()
+      .completeOnboarding(
+        { genreIds: ['jazz'], moodIds: ['chill'], artistIds: [], context: 'relax' },
+        [],
+      );
     const played = track('kessler-grid-2');
-    await store.getState().recordListen(played, {
-      trackId: played.id,
-      startedAt: NOW,
-      msPlayed: played.durationMs,
-      durationMs: played.durationMs,
-      completed: true,
-      skipped: false,
-    });
+    await store.getState().recordListen(
+      played,
+      {
+        trackId: played.id,
+        startedAt: NOW,
+        msPlayed: played.durationMs,
+        durationMs: played.durationMs,
+        completed: true,
+        skipped: false,
+      },
+      { ...emptyFeatures(), popularity: 1 },
+    );
     expect(store.getState().recentListens[0]?.trackId).toBe(played.id);
     expect(store.getState().profile?.listenCount).toBe(1);
     expect(store.getState().profile?.genreWeights['techno']).toBeGreaterThan(0);
+    expect(store.getState().profile?.ranker.updates).toBe(1);
     expect(await services.repos.listens.recent(5)).toHaveLength(1);
+    expect(store.getState().getTrack(played.id)).toBeDefined();
   });
 
   it('imports supported files with their audio and rejects the rest', async () => {
@@ -157,18 +239,20 @@ describe('appStore', () => {
     expect(await services.repos.audioBlobs.get(imported.id)).toBeUndefined();
   });
 
-  it('round-trips an export through import on a fresh store', async () => {
+  it('round-trips an export through import on a fresh store, including referenced tracks', async () => {
     const source = setup();
     await source.store.getState().hydrate();
-    await source.store.getState().completeOnboarding({
-      genreIds: ['house'],
-      moodIds: ['hype'],
-      artistIds: [],
-      context: 'party',
-    });
+    await source.store
+      .getState()
+      .completeOnboarding(
+        { genreIds: ['house'], moodIds: ['hype'], artistIds: [], context: 'party' },
+        [],
+      );
+    source.store.getState().rememberTracks([track('delphine-rey-1')]);
     await source.store.getState().createPlaylist('Export me', ['delphine-rey-1']);
     await source.store.getState().toggleFollow('genre', 'house');
     const bundle = await source.store.getState().exportData();
+    expect(bundle.tracks.map((t) => t.id)).toEqual(['delphine-rey-1']);
 
     const target = setup();
     await target.store.getState().hydrate();
@@ -176,6 +260,7 @@ describe('appStore', () => {
     expect(target.store.getState().playlists.map((p) => p.name)).toEqual(['Export me']);
     expect(target.store.getState().follows).toHaveLength(1);
     expect(target.store.getState().profile?.genreWeights['house']).toBe(1);
+    expect(target.store.getState().getTrack('delphine-rey-1')).toBeDefined();
   });
 
   it('refuses to import something that is not a Weegood export', async () => {

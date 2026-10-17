@@ -1,7 +1,7 @@
 import { formatDuration } from '@weegood/core';
 import type { CSSProperties } from 'react';
 import { Link } from 'wouter';
-import { useApp, usePlayer, useServices, useStores } from '../app/storesContext';
+import { useApp, usePlayer, useStores } from '../app/storesContext';
 import { trackHue } from '../lib/hue';
 import { Button } from './Button';
 import { Cover } from './Cover';
@@ -9,7 +9,6 @@ import { QueuePanel } from './QueuePanel';
 
 export function PlayerBar() {
   const { resolveTrack } = useStores();
-  const { index } = useServices();
   const currentTrackId = usePlayer((state) => state.currentTrackId);
   const status = usePlayer((state) => state.status);
   const positionMs = usePlayer((state) => state.positionMs);
@@ -36,6 +35,7 @@ export function PlayerBar() {
 
   const track = currentTrackId ? resolveTrack(currentTrackId) : undefined;
   const playing = status === 'playing';
+  const loading = status === 'loading';
   const progress = durationMs > 0 ? Math.min(100, (positionMs / durationMs) * 100) : 0;
 
   return (
@@ -44,14 +44,16 @@ export function PlayerBar() {
         <div className="player__now">
           {track ? (
             <>
-              <Cover title={track.title} hue={trackHue(track, index.genresById)} size={48} />
+              <Cover title={track.title} hue={trackHue(track)} src={track.artworkUrl} size={48} />
               <div className="player__now-text">
                 <span className="truncate" style={{ fontWeight: 600 }}>
                   {track.title}
                 </span>
                 <span className="muted small truncate">
                   {track.artistId ? (
-                    <Link href={`/artist/${track.artistId}`}>{track.artistName}</Link>
+                    <Link href={`/artist/${encodeURIComponent(track.artistId)}`}>
+                      {track.artistName}
+                    </Link>
                   ) : (
                     track.artistName
                   )}
@@ -99,9 +101,9 @@ export function PlayerBar() {
               size="lg"
               icon={playing ? 'pause' : 'play'}
               iconOnly
-              label={playing ? 'Pause' : 'Play'}
+              label={loading ? 'Loading' : playing ? 'Pause' : 'Play'}
               onClick={() => void togglePlay()}
-              disabled={!track}
+              disabled={!track || loading}
             />
             <Button
               variant="ghost"

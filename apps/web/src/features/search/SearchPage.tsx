@@ -1,80 +1,86 @@
-import { pluralize } from '@weegood/core';
-import { useMemo, type CSSProperties } from 'react';
+import { GENRES, pluralize, type Artist, type Playlist, type Track } from '@weegood/core';
+import { useCallback, useMemo, type CSSProperties } from 'react';
 import { Link, useSearch } from 'wouter';
 import { useApp, useServices } from '../../app/storesContext';
 import { ArtistCard } from '../../components/ArtistCard';
-import { Avatar } from '../../components/Avatar';
+import { AsyncState } from '../../components/AsyncState';
 import { EmptyState } from '../../components/EmptyState';
-import { FollowButton } from '../../components/FollowButton';
 import { Section } from '../../components/Section';
 import { TrackList } from '../../components/TrackList';
+import { useQuery } from '../../hooks/useQuery';
 import { hueFor } from '../../lib/hue';
+
+interface Results {
+  tracks: Track[];
+  artists: Artist[];
+  playlists: Playlist[];
+}
 
 export function SearchPage() {
   const search = useSearch();
-  const query = (new URLSearchParams(search).get('q') ?? '').trim().toLowerCase();
-  const { catalog } = useServices();
+  const query = (new URLSearchParams(search).get('q') ?? '').trim();
+  const lower = query.toLowerCase();
+  const { music } = useServices();
   const localTracks = useApp((state) => state.localTracks);
   const playlists = useApp((state) => state.playlists);
+  const rememberTracks = useApp((state) => state.rememberTracks);
 
-  const results = useMemo(() => {
-    if (query.length === 0) return null;
-    const match = (text: string) => text.toLowerCase().includes(query);
+  const fetcher = useCallback(async (): Promise<Results> => {
+    const [tracks, artists, remotePlaylists] = await Promise.all([
+      music.searchTracks(query, 25),
+      music.searchArtists(query, 8).catch(() => [] as Artist[]),
+      music.searchPlaylists(query, 8).catch(() => [] as Playlist[]),
+    ]);
+    rememberTracks(tracks);
+    return { tracks, artists, playlists: remotePlaylists };
+  }, [music, query, rememberTracks]);
+  const remote = useQuery<Results>(lower.length >= 2 ? `search:${lower}` : null, fetcher);
+
+  const local = useMemo(() => {
+    if (lower.length === 0)
+      return { tracks: [] as Track[], playlists: [] as Playlist[], genres: [] as typeof GENRES };
+    const match = (text: string) => text.toLowerCase().includes(lower);
     return {
-      tracks: [...localTracks, ...catalog.tracks]
-        .filter((track) => match(track.title) || match(track.artistName))
-        .slice(0, 25),
-      artists: catalog.artists.filter((artist) => match(artist.name)).slice(0, 12),
-      genres: catalog.genres.filter((genre) => match(genre.name)),
-      people: catalog.users.filter((user) => match(user.displayName) || match(user.handle)),
-      playlists: [...playlists, ...catalog.playlists].filter((playlist) => match(playlist.name)),
+      tracks: localTracks.filter((track) => match(track.title) || match(track.artistName)),
+      playlists: playlists.filter((playlist) => match(playlist.name)),
+      genres: GENRES.filter((genre) => match(genre.name)),
     };
-  }, [query, localTracks, playlists, catalog]);
+  }, [lower, localTracks, playlists]);
 
-  if (!results) {
+  if (lower.length === 0) {
     return (
       <div className="page">
         <EmptyState
           icon="search"
           title="Search Weegood"
-          description="Tracks, artists, genres, people and playlists. Press / anywhere to jump to the search box."
+          description="Tracks, artists and playlists on Audius, plus your own files and playlists. Press / anywhere to jump here."
         />
       </div>
     );
   }
 
-  const total =
-    results.tracks.length +
-    results.artists.length +
-    results.genres.length +
-    results.people.length +
-    results.playlists.length;
-
-  if (total === 0) {
-    return (
-      <div className="page">
-        <EmptyState
-          icon="search"
-          title={`Nothing for "${query}"`}
-          description="Try a shorter word, or browse by genre."
-        />
-      </div>
-    );
-  }
+  const tracks = [...local.tracks, ...(remote.data?.tracks ?? [])];
+  const artists = remote.data?.artists ?? [];
+  const allPlaylists = [...local.playlists, ...(remote.data?.playlists ?? [])];
+  const total = tracks.length + artists.length + allPlaylists.length + local.genres.length;
 
   return (
     <div className="page">
       <header className="page-header">
         <div className="page-header__text">
           <h1>Results for &ldquo;{query}&rdquo;</h1>
-          <p className="muted">{pluralize(total, 'match', 'matches')}</p>
+          <p className="muted">
+            {remote.loading && total === 0
+              ? 'Searching Audius...'
+              : pluralize(total, 'match', 'matches')}
+          </p>
         </div>
       </header>
 
-      {results.genres.length > 0 && (
+      {local.genres.length > 0 && (
         <Section title="Genres">
           <div className="grid">
-            {results.genres.map((genre) => (
+            {local.genres.map((genre) => (
               <Link
                 key={genre.id}
                 href={`/genre/${genre.id}`}
@@ -88,64 +94,51 @@ export function SearchPage() {
         </Section>
       )}
 
-      {results.artists.length > 0 && (
-        <Section title="Artists">
-          <div className="grid grid--wide">
-            {results.artists.map((artist) => (
-              <ArtistCard key={artist.id} artist={artist} />
-            ))}
-          </div>
-        </Section>
-      )}
+      <AsyncState
+        loading={remote.loading}
+        error={remote.error}
+        empty={total === 0}
+        emptyMessage={`Nothing for "${query}". Try a shorter word, or browse by genre.`}
+        onRetry={remote.refresh}
+      >
+        {artists.length > 0 && (
+          <Section title="Artists">
+            <div className="grid grid--wide">
+              {artists.map((artist) => (
+                <ArtistCard key={artist.id} artist={artist} />
+              ))}
+            </div>
+          </Section>
+        )}
 
-      {results.tracks.length > 0 && (
-        <Section title="Tracks">
-          <TrackList tracks={results.tracks} contextLabel={`Search: ${query}`} />
-        </Section>
-      )}
+        {tracks.length > 0 && (
+          <Section title="Tracks">
+            <TrackList tracks={tracks} contextLabel={`Search: ${query}`} />
+          </Section>
+        )}
 
-      {results.playlists.length > 0 && (
-        <Section title="Playlists">
-          <div className="grid">
-            {results.playlists.map((playlist) => (
-              <Link
-                key={playlist.id}
-                href={`/playlist/${playlist.id}`}
-                className="tile"
-                style={{ '--hue': hueFor(playlist.id) } as CSSProperties}
-              >
-                <span className="truncate">{playlist.name}</span>
-                <span className="tile__sub">{pluralize(playlist.trackIds.length, 'track')}</span>
-              </Link>
-            ))}
-          </div>
-        </Section>
-      )}
-
-      {results.people.length > 0 && (
-        <Section title="People">
-          <div className="grid grid--wide">
-            {results.people.map((user) => (
-              <div key={user.id} className="entity-card">
+        {allPlaylists.length > 0 && (
+          <Section title="Playlists">
+            <div className="grid">
+              {allPlaylists.map((playlist) => (
                 <Link
-                  href={`/u/${user.handle}`}
-                  style={{ display: 'flex' }}
-                  aria-label={user.displayName}
+                  key={playlist.id}
+                  href={`/playlist/${encodeURIComponent(playlist.id)}`}
+                  className="tile"
+                  style={{ '--hue': hueFor(playlist.id) } as CSSProperties}
                 >
-                  <Avatar name={user.displayName} hue={user.avatarHue} size={48} />
+                  <span className="truncate">{playlist.name}</span>
+                  <span className="tile__sub">
+                    {playlist.ownerName
+                      ? `by ${playlist.ownerName}`
+                      : pluralize(playlist.trackIds.length, 'track')}
+                  </span>
                 </Link>
-                <div className="entity-card__text">
-                  <Link href={`/u/${user.handle}`} style={{ fontWeight: 600 }}>
-                    {user.displayName}
-                  </Link>
-                  <span className="muted small">@{user.handle}</span>
-                </div>
-                <FollowButton kind="user" targetId={user.id} size="sm" />
-              </div>
-            ))}
-          </div>
-        </Section>
-      )}
+              ))}
+            </div>
+          </Section>
+        )}
+      </AsyncState>
     </div>
   );
 }

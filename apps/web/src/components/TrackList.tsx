@@ -1,5 +1,5 @@
 import type { Track } from '@weegood/core';
-import { usePlayer } from '../app/storesContext';
+import { useApp, usePlayer } from '../app/storesContext';
 import { TrackRow } from './TrackRow';
 
 interface TrackListProps {
@@ -22,8 +22,13 @@ export function TrackList({
   numbered = true,
 }: TrackListProps) {
   const playQueue = usePlayer((state) => state.playQueue);
+  const rememberTracks = useApp((state) => state.rememberTracks);
   const ids = tracks.map((track) => track.id);
   const total = tracks.length;
+  const play = (i: number) => {
+    rememberTracks(tracks);
+    void playQueue(ids, i, contextLabel ?? null);
+  };
   return (
     <div className="track-list">
       {tracks.map((track, i) => (
@@ -32,7 +37,7 @@ export function TrackList({
           track={track}
           index={numbered ? i : undefined}
           reason={reasons?.get(track.id)}
-          onPlay={() => void playQueue(ids, i, contextLabel ?? null)}
+          onPlay={() => play(i)}
           inPlaylistId={inPlaylistId}
           onMoveUp={onMove && i > 0 ? () => onMove(i, i - 1) : undefined}
           onMoveDown={onMove && i < total - 1 ? () => onMove(i, i + 1) : undefined}

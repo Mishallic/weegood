@@ -1,24 +1,32 @@
-import type { ListenEvent, RecommendationInput, TasteProfile } from '@weegood/core';
+import type {
+  ListenEvent,
+  PeopleSignal,
+  RecommendationInput,
+  TasteProfileV2,
+  Track,
+} from '@weegood/core';
 import { useMemo } from 'react';
 import { useApp, useServices } from '../app/storesContext';
 import { buildRecommendationInput } from '../state/recommendationInput';
 
-export interface RecommendationInputOverrides {
+export interface RecommendationInputOptions {
+  /** Candidate pool, usually fetched from the provider for the current page. */
+  tracks: readonly Track[];
+  peopleSignals?: readonly PeopleSignal[] | undefined;
   /** Use a snapshot instead of the live profile, so a feed does not reshuffle mid-session. */
-  profile?: TasteProfile | null;
-  recentListens?: readonly ListenEvent[];
+  profile?: TasteProfileV2 | null | undefined;
+  recentListens?: readonly ListenEvent[] | undefined;
 }
 
-/** Engine input over the demo catalog. Local tracks are library items, not candidates. */
-export function useRecommendationInput(
-  overrides: RecommendationInputOverrides = {},
-): RecommendationInput {
-  const { catalog, index, now } = useServices();
+export function useRecommendationInput(options: RecommendationInputOptions): RecommendationInput {
+  const { now } = useServices();
   const liveProfile = useApp((state) => state.profile);
   const follows = useApp((state) => state.follows);
   const liveListens = useApp((state) => state.recentListens);
-  const profile = overrides.profile === undefined ? liveProfile : overrides.profile;
-  const recentListens = overrides.recentListens ?? liveListens;
+  const artists = useApp((state) => state.artists);
+  const profile = options.profile === undefined ? liveProfile : options.profile;
+  const recentListens = options.recentListens ?? liveListens;
+  const { tracks, peopleSignals } = options;
 
   return useMemo(
     () =>
@@ -26,10 +34,11 @@ export function useRecommendationInput(
         profile,
         follows,
         recentListens,
-        tracks: catalog.tracks,
-        index,
+        tracks,
+        artistsById: new Map(Object.entries(artists)),
+        peopleSignals: peopleSignals ?? [],
         now: now(),
       }),
-    [profile, follows, recentListens, catalog, index, now],
+    [profile, follows, recentListens, tracks, artists, peopleSignals, now],
   );
 }

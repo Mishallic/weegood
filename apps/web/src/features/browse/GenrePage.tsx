@@ -1,7 +1,9 @@
-import { describeVibe, NEUTRAL_VIBE, vibeSimilarity } from '@weegood/core';
-import { useMemo } from 'react';
+import { describeVibe, genreById, rankAll, type Artist, type Track } from '@weegood/core';
+import { useCallback, useMemo, useState } from 'react';
 import { useParams } from 'wouter';
 import { useApp, usePlayer, useServices } from '../../app/storesContext';
+import { ArtistCard } from '../../components/ArtistCard';
+import { AsyncState } from '../../components/AsyncState';
 import { Button } from '../../components/Button';
 import { Chip } from '../../components/Chip';
 import { Cover } from '../../components/Cover';
@@ -9,29 +11,64 @@ import { FollowButton } from '../../components/FollowButton';
 import { NotFound } from '../../components/NotFound';
 import { Section } from '../../components/Section';
 import { TrackList } from '../../components/TrackList';
+import { useQuery } from '../../hooks/useQuery';
+import { useRecommendationInput } from '../../hooks/useRecommendationInput';
+import type { TrendingWindow } from '../../providers/types';
+
+const WINDOWS: Array<{ id: TrendingWindow; label: string }> = [
+  { id: 'week', label: 'This week' },
+  { id: 'month', label: 'This month' },
+  { id: 'allTime', label: 'All time' },
+];
 
 export function GenrePage() {
   const { id = '' } = useParams<{ id: string }>();
-  const { catalog, index } = useServices();
-  const profileVibe = useApp((state) => state.profile?.vibe ?? NEUTRAL_VIBE);
+  const { music } = useServices();
+  const rememberTracks = useApp((state) => state.rememberTracks);
   const playQueue = usePlayer((state) => state.playQueue);
-  const genre = index.genresById.get(id);
+  const genre = genreById(id);
+  const [window, setWindow] = useState<TrendingWindow>('week');
+  const [personal, setPersonal] = useState(true);
 
-  const tracks = useMemo(() => {
-    const list = index.tracksByGenreId.get(id) ?? [];
-    return [...list].sort(
-      (a, b) => vibeSimilarity(profileVibe, b.vibe) - vibeSimilarity(profileVibe, a.vibe),
-    );
-  }, [index, id, profileVibe]);
+  const fetcher = useCallback(async () => {
+    const tracks = await music.trending({ genreId: id, window, limit: 100 });
+    rememberTracks(tracks);
+    return tracks;
+  }, [music, id, window, rememberTracks]);
+  const query = useQuery<Track[]>(genre ? `genre:${id}:${window}` : null, fetcher);
+  const tracks = useMemo(() => query.data ?? [], [query.data]);
+
+  const input = useRecommendationInput({ tracks });
+  const ordered = useMemo(
+    () =>
+      personal
+        ? rankAll(input)
+        : tracks.map((track) => ({ track, score: track.popularity, reasons: [] as string[] })),
+    [personal, input, tracks],
+  );
+  const reasons = useMemo(
+    () => new Map(ordered.map((item) => [item.track.id, item.reasons[0] ?? ''])),
+    [ordered],
+  );
+
+  const artists = useMemo(() => {
+    const seen = new Map<string, Artist>();
+    for (const track of tracks) {
+      if (!track.artistId || seen.has(track.artistId)) continue;
+      const artist = music.cachedArtist(track.artistId);
+      if (artist) seen.set(artist.id, artist);
+    }
+    return [...seen.values()].sort((a, b) => b.followerCount - a.followerCount).slice(0, 6);
+  }, [tracks, music]);
 
   if (!genre) return <NotFound what="genre" />;
 
-  const artists = catalog.artists.filter((artist) => artist.genreIds.includes(genre.id));
+  const orderedTracks = ordered.map((item) => item.track);
 
   return (
     <div className="page">
       <section className="hero">
-        <Cover title={genre.name} hue={genre.hue} size={140} />
+        <Cover title={genre.name} hue={genre.hue} src={tracks[0]?.artworkUrl} size={140} />
         <div className="hero__body">
           <span className="hero__kicker">Genre</span>
           <h1 className="hero__title">{genre.name}</h1>
@@ -41,14 +78,15 @@ export function GenrePage() {
             <Button
               variant="primary"
               icon="play"
-              onClick={() =>
+              onClick={() => {
+                rememberTracks(orderedTracks);
                 void playQueue(
-                  tracks.map((track) => track.id),
+                  orderedTracks.map((track) => track.id),
                   0,
                   genre.name,
-                )
-              }
-              disabled={tracks.length === 0}
+                );
+              }}
+              disabled={orderedTracks.length === 0}
             >
               Play
             </Button>
@@ -57,18 +95,57 @@ export function GenrePage() {
         </div>
       </section>
 
-      <Section title="Artists">
+      <div className="row" style={{ flexWrap: 'wrap' }}>
         <div className="chip-row">
-          {artists.map((artist) => (
-            <Chip key={artist.id} href={`/artist/${artist.id}`}>
-              {artist.name}
+          {WINDOWS.map((option) => (
+            <Chip
+              key={option.id}
+              pressed={window === option.id}
+              onClick={() => setWindow(option.id)}
+            >
+              {option.label}
             </Chip>
           ))}
         </div>
-      </Section>
+        <span className="spacer" />
+        <div className="chip-row">
+          <Chip pressed={personal} onClick={() => setPersonal(true)}>
+            For you
+          </Chip>
+          <Chip pressed={!personal} onClick={() => setPersonal(false)}>
+            Most played
+          </Chip>
+        </div>
+      </div>
 
-      <Section title="Tracks" subtitle="Ordered by how close each one is to your vibe.">
-        <TrackList tracks={tracks} contextLabel={genre.name} />
+      {artists.length > 0 && (
+        <Section title="Artists in this genre">
+          <div className="grid grid--wide">
+            {artists.map((artist) => (
+              <ArtistCard key={artist.id} artist={artist} />
+            ))}
+          </div>
+        </Section>
+      )}
+
+      <Section
+        title="Tracks"
+        subtitle={
+          personal ? 'Ordered by how well each one fits you.' : 'Ordered by plays on Audius.'
+        }
+      >
+        <AsyncState
+          loading={query.loading}
+          error={query.error}
+          empty={tracks.length === 0}
+          onRetry={query.refresh}
+        >
+          <TrackList
+            tracks={orderedTracks}
+            contextLabel={genre.name}
+            reasons={personal ? reasons : undefined}
+          />
+        </AsyncState>
       </Section>
     </div>
   );

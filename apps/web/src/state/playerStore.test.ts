@@ -1,21 +1,24 @@
 import { createCatalogIndex, DEMO_CATALOG, type ListenEvent, type Track } from '@weegood/core';
 import { describe, expect, it } from 'vitest';
 import type { EngineSnapshot } from '../audio/engine';
-import { createPlayerStore, type PlayerControllerLike } from './playerStore';
+import { createPlayerStore, type PlaybackEngineLike } from './playerStore';
 
 const index = createCatalogIndex(DEMO_CATALOG);
 const NOW = 1_800_000_000_000;
 
-class FakeController implements PlayerControllerLike {
+class FakeEngine implements PlaybackEngineLike {
   loaded: Track[] = [];
+  prefetched: Track[] = [];
   plays = 0;
   pauses = 0;
   seeks: number[] = [];
   volume = 1;
+  failOn = new Set<string>();
   private current: Track | null = null;
   private listeners = new Set<(snapshot: EngineSnapshot) => void>();
 
   async load(track: Track): Promise<void> {
+    if (this.failOn.has(track.id)) throw new Error(`cannot load ${track.id}`);
     this.loaded.push(track);
     this.current = track;
   }
@@ -33,6 +36,9 @@ class FakeController implements PlayerControllerLike {
   }
   setVolume(volume: number): void {
     this.volume = volume;
+  }
+  prefetch(track: Track): void {
+    this.prefetched.push(track);
   }
   subscribe(listener: (snapshot: EngineSnapshot) => void): () => void {
     this.listeners.add(listener);
@@ -52,31 +58,37 @@ class FakeController implements PlayerControllerLike {
 }
 
 function setup() {
-  const controller = new FakeController();
+  const engine = new FakeEngine();
   const listens: Array<{ track: Track; event: ListenEvent }> = [];
+  const starts: Array<{ track: Track; next: Track | null }> = [];
   const store = createPlayerStore({
-    controller,
+    engine,
     resolveTrack: (id) => index.tracksById.get(id),
     loadBlob: async () => null,
     onListen: (track, event) => listens.push({ track, event }),
+    onTrackStart: (track, next) => starts.push({ track, next }),
     now: () => NOW,
     random: () => 0.5,
+    errorSkipDelayMs: 0,
   });
-  return { controller, store, listens };
+  return { engine, store, listens, starts };
 }
 
 const IDS = ['lux-marlowe-1', 'lux-marlowe-2', 'lux-marlowe-3'];
+const tick = () => new Promise((resolve) => setTimeout(resolve, 5));
 
 describe('playerStore', () => {
-  it('plays a queue from the chosen index', async () => {
-    const { store, controller } = setup();
+  it('plays a queue from the chosen index and announces the start with the next track', async () => {
+    const { store, engine, starts } = setup();
     await store.getState().playQueue(IDS, 1, 'Test');
     expect(store.getState().currentTrackId).toBe('lux-marlowe-2');
     expect(store.getState().index).toBe(1);
     expect(store.getState().contextLabel).toBe('Test');
     expect(store.getState().status).toBe('playing');
-    expect(controller.loaded.map((t) => t.id)).toEqual(['lux-marlowe-2']);
-    expect(controller.plays).toBe(1);
+    expect(engine.loaded.map((t) => t.id)).toEqual(['lux-marlowe-2']);
+    expect(engine.plays).toBe(1);
+    expect(starts[0]?.track.id).toBe('lux-marlowe-2');
+    expect(starts[0]?.next?.id).toBe('lux-marlowe-3');
   });
 
   it('drops ids it cannot resolve', async () => {
@@ -86,12 +98,11 @@ describe('playerStore', () => {
   });
 
   it('records a completed listen when a track ends and advances', async () => {
-    const { store, controller, listens } = setup();
+    const { store, engine, listens } = setup();
     await store.getState().playQueue(IDS, 0);
-    controller.emit({ positionMs: 120_000 });
-    controller.emit({ status: 'ended', positionMs: 200_000 });
-    await Promise.resolve();
-    await Promise.resolve();
+    engine.emit({ positionMs: 120_000 });
+    engine.emit({ status: 'ended', positionMs: 200_000 });
+    await tick();
     expect(listens).toHaveLength(1);
     expect(listens[0]?.event.completed).toBe(true);
     expect(listens[0]?.event.skipped).toBe(false);
@@ -99,10 +110,10 @@ describe('playerStore', () => {
   });
 
   it('records a skip with the furthest position reached', async () => {
-    const { store, controller, listens } = setup();
+    const { store, engine, listens } = setup();
     await store.getState().playQueue(IDS, 0);
-    controller.emit({ positionMs: 42_000 });
-    controller.emit({ positionMs: 10_000 });
+    engine.emit({ positionMs: 42_000 });
+    engine.emit({ positionMs: 10_000 });
     await store.getState().next();
     expect(listens).toHaveLength(1);
     expect(listens[0]?.event.skipped).toBe(true);
@@ -111,42 +122,58 @@ describe('playerStore', () => {
   });
 
   it('stops at the end of the queue unless repeat all is on', async () => {
-    const { store, controller } = setup();
+    const { store, engine } = setup();
     await store.getState().playQueue(IDS, 2);
-    controller.emit({ status: 'ended', positionMs: 1 });
-    await Promise.resolve();
+    engine.emit({ status: 'ended', positionMs: 1 });
+    await tick();
     expect(store.getState().status).toBe('ended');
     expect(store.getState().currentTrackId).toBe('lux-marlowe-3');
 
     store.getState().cycleRepeat();
     expect(store.getState().repeat).toBe('all');
-    controller.emit({ status: 'ended', positionMs: 1 });
-    await Promise.resolve();
-    await Promise.resolve();
+    engine.emit({ status: 'ended', positionMs: 1 });
+    await tick();
     expect(store.getState().currentTrackId).toBe('lux-marlowe-1');
   });
 
   it('repeat one replays the same track', async () => {
-    const { store, controller } = setup();
+    const { store, engine } = setup();
     await store.getState().playQueue(IDS, 0);
     store.getState().cycleRepeat();
     store.getState().cycleRepeat();
     expect(store.getState().repeat).toBe('one');
-    controller.emit({ status: 'ended', positionMs: 1 });
-    await Promise.resolve();
-    await Promise.resolve();
+    engine.emit({ status: 'ended', positionMs: 1 });
+    await tick();
     expect(store.getState().currentTrackId).toBe('lux-marlowe-1');
-    expect(controller.loaded).toHaveLength(2);
+    expect(engine.loaded).toHaveLength(2);
+  });
+
+  it('skips past a track that fails to load, but gives up after repeated failures', async () => {
+    const { store, engine } = setup();
+    engine.failOn.add('lux-marlowe-1');
+    await store.getState().playQueue(IDS, 0);
+    expect(store.getState().status).toBe('error');
+    await tick();
+    expect(store.getState().currentTrackId).toBe('lux-marlowe-2');
+    expect(store.getState().status).toBe('playing');
+
+    const stuck = setup();
+    for (const id of IDS) stuck.engine.failOn.add(id);
+    await stuck.store.getState().playQueue(IDS, 0);
+    await tick();
+    await tick();
+    expect(stuck.store.getState().status).toBe('error');
+    expect(stuck.store.getState().currentTrackId).toBe('lux-marlowe-3');
   });
 
   it('previous restarts after three seconds, otherwise goes back', async () => {
-    const { store, controller } = setup();
+    const { store, engine } = setup();
     await store.getState().playQueue(IDS, 1);
-    controller.emit({ positionMs: 5000 });
+    engine.emit({ positionMs: 5000 });
     await store.getState().previous();
-    expect(controller.seeks).toEqual([0]);
+    expect(engine.seeks).toEqual([0]);
     expect(store.getState().currentTrackId).toBe('lux-marlowe-2');
-    controller.emit({ positionMs: 1000 });
+    engine.emit({ positionMs: 1000 });
     await store.getState().previous();
     expect(store.getState().currentTrackId).toBe('lux-marlowe-1');
   });
@@ -166,8 +193,7 @@ describe('playerStore', () => {
   it('enqueue starts playback when idle and appends otherwise', async () => {
     const { store } = setup();
     expect(store.getState().enqueue(['lux-marlowe-1'])).toBe(1);
-    await Promise.resolve();
-    await Promise.resolve();
+    await tick();
     expect(store.getState().currentTrackId).toBe('lux-marlowe-1');
     store.getState().enqueue(['lux-marlowe-2']);
     store.getState().playNext('lux-marlowe-3');
@@ -177,23 +203,23 @@ describe('playerStore', () => {
   });
 
   it('toggles play and pause and clamps seek and volume', async () => {
-    const { store, controller } = setup();
+    const { store, engine } = setup();
     await store.getState().playQueue(IDS, 0);
     await store.getState().togglePlay();
-    expect(controller.pauses).toBe(1);
+    expect(engine.pauses).toBe(1);
     expect(store.getState().status).toBe('paused');
     await store.getState().togglePlay();
-    expect(controller.plays).toBe(2);
+    expect(engine.plays).toBe(2);
     store.getState().seek(-5);
-    expect(controller.seeks.at(-1)).toBe(0);
+    expect(engine.seeks.at(-1)).toBe(0);
     store.getState().setVolume(1.7);
-    expect(controller.volume).toBe(1);
+    expect(engine.volume).toBe(1);
   });
 
   it('stop clears everything and records the interrupted listen', async () => {
-    const { store, controller, listens } = setup();
+    const { store, engine, listens } = setup();
     await store.getState().playQueue(IDS, 0);
-    controller.emit({ positionMs: 3000 });
+    engine.emit({ positionMs: 3000 });
     store.getState().stop();
     expect(listens).toHaveLength(1);
     expect(store.getState().queue).toEqual([]);

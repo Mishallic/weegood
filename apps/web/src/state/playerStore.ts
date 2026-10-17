@@ -4,23 +4,28 @@ import type { EngineSnapshot, EngineStatus } from '../audio/engine';
 
 export type RepeatMode = 'off' | 'all' | 'one';
 
-/** The subset of PlayerController the store needs. Tests pass a fake. */
-export interface PlayerControllerLike {
+/** The subset of the playback engine the store needs. Tests pass a fake. */
+export interface PlaybackEngineLike {
   load(track: Track, blob: Blob | null): Promise<void>;
   play(): Promise<void>;
   pause(): void;
   seek(positionMs: number): void;
   setVolume(volume: number): void;
   subscribe(listener: (snapshot: EngineSnapshot) => void): () => void;
+  prefetch?(track: Track): void;
 }
 
 export interface PlayerDeps {
-  controller: PlayerControllerLike;
+  engine: PlaybackEngineLike;
   resolveTrack: (id: Id) => Track | undefined;
   loadBlob: (track: Track) => Promise<Blob | null>;
   onListen: (track: Track, event: ListenEvent) => void;
+  /** Fires once a track is loaded and about to play; `next` is what follows in the queue. */
+  onTrackStart?: (track: Track, next: Track | null) => void;
   now: () => number;
   random?: () => number;
+  /** How long to show an error before skipping to the next track. Default 1200 ms. */
+  errorSkipDelayMs?: number;
 }
 
 export interface PlayerState {
@@ -69,11 +74,15 @@ interface Session {
 
 const VOLUME_KEY = 'weegood:volume';
 const PREVIOUS_RESTART_MS = 3000;
+const MAX_CONSECUTIVE_ERRORS = 3;
 
 export function createPlayerStore(deps: PlayerDeps): PlayerStore {
   const random = deps.random ?? Math.random;
+  const errorSkipDelayMs = deps.errorSkipDelayMs ?? 1200;
   let session: Session | null = null;
   let loadSeq = 0;
+  let consecutiveErrors = 0;
+  let errorTimer: ReturnType<typeof setTimeout> | null = null;
 
   const store = create<PlayerState>()((set, get) => {
     const endSession = (completed: boolean): void => {
@@ -90,7 +99,15 @@ export function createPlayerStore(deps: PlayerDeps): PlayerStore {
       });
     };
 
+    const clearErrorTimer = (): void => {
+      if (errorTimer) {
+        clearTimeout(errorTimer);
+        errorTimer = null;
+      }
+    };
+
     const startTrack = async (position: number, autoplay = true): Promise<void> => {
+      clearErrorTimer();
       const id = get().queue[position];
       const track = id ? deps.resolveTrack(id) : undefined;
       if (!track) {
@@ -113,16 +130,19 @@ export function createPlayerStore(deps: PlayerDeps): PlayerStore {
         if (track.source.kind === 'local' && !blob) {
           throw new Error('The audio for this track is missing. Import it again.');
         }
-        await deps.controller.load(track, blob);
+        await deps.engine.load(track, blob);
         if (seq !== loadSeq) return;
         session = { track, startedAt: deps.now(), maxPositionMs: 0 };
-        if (autoplay) await deps.controller.play();
+        const nextId = get().queue[position + 1];
+        deps.onTrackStart?.(track, nextId ? (deps.resolveTrack(nextId) ?? null) : null);
+        if (autoplay) await deps.engine.play();
       } catch (error) {
         if (seq === loadSeq) {
           set({
             status: 'error',
             error: error instanceof Error ? error.message : 'Playback failed.',
           });
+          scheduleErrorSkip();
         }
       }
     };
@@ -142,16 +162,30 @@ export function createPlayerStore(deps: PlayerDeps): PlayerStore {
       }
     };
 
-    deps.controller.subscribe((snapshot) => {
-      if (session && snapshot.positionMs > session.maxPositionMs) {
+    /** A broken stream should not stall the session: move on, but not forever. */
+    const scheduleErrorSkip = (): void => {
+      consecutiveErrors++;
+      if (consecutiveErrors > MAX_CONSECUTIVE_ERRORS) return;
+      const { queue, index } = get();
+      if (index + 1 >= queue.length) return;
+      clearErrorTimer();
+      errorTimer = setTimeout(() => {
+        errorTimer = null;
+        if (get().status === 'error') void advance(false);
+      }, errorSkipDelayMs);
+    };
+
+    deps.engine.subscribe((snapshot) => {
+      if (session && snapshot.positionMs > session.maxPositionMs)
         session.maxPositionMs = snapshot.positionMs;
-      }
       if (snapshot.status === 'ended') {
         endSession(true);
         set({ status: 'ended', positionMs: snapshot.positionMs });
         void advance(true);
         return;
       }
+      if (snapshot.status === 'playing') consecutiveErrors = 0;
+      if (snapshot.status === 'error' && get().status !== 'error') scheduleErrorSkip();
       set({
         status: snapshot.status,
         positionMs: snapshot.positionMs,
@@ -178,6 +212,7 @@ export function createPlayerStore(deps: PlayerDeps): PlayerStore {
       async playQueue(trackIds, startIndex = 0, label = null) {
         const ids = trackIds.filter((id) => deps.resolveTrack(id) !== undefined);
         if (ids.length === 0) return;
+        consecutiveErrors = 0;
         let queue = ids;
         let position = Math.min(Math.max(startIndex, 0), ids.length - 1);
         if (get().shuffle) {
@@ -231,20 +266,22 @@ export function createPlayerStore(deps: PlayerDeps): PlayerStore {
       },
 
       async jumpTo(position) {
+        consecutiveErrors = 0;
         await startTrack(position);
       },
 
       async togglePlay() {
         const state = get();
         if (state.status === 'playing') {
-          deps.controller.pause();
+          deps.engine.pause();
         } else if (state.currentTrackId) {
-          if (state.status === 'ended') await startTrack(state.index);
-          else await deps.controller.play();
+          if (state.status === 'ended' || state.status === 'error') await startTrack(state.index);
+          else await deps.engine.play();
         }
       },
 
       async next() {
+        consecutiveErrors = 0;
         await advance(false);
       },
 
@@ -259,13 +296,13 @@ export function createPlayerStore(deps: PlayerDeps): PlayerStore {
 
       seek(positionMs) {
         const clamped = Math.max(0, Math.min(positionMs, get().durationMs || positionMs));
-        deps.controller.seek(clamped);
+        deps.engine.seek(clamped);
         set({ positionMs: clamped });
       },
 
       setVolume(volume) {
         const clamped = Math.max(0, Math.min(1, volume));
-        deps.controller.setVolume(clamped);
+        deps.engine.setVolume(clamped);
         set({ volume: clamped });
         try {
           localStorage.setItem(VOLUME_KEY, String(clamped));
@@ -303,9 +340,10 @@ export function createPlayerStore(deps: PlayerDeps): PlayerStore {
       },
 
       stop() {
+        clearErrorTimer();
         endSession(false);
         loadSeq++;
-        deps.controller.pause();
+        deps.engine.pause();
         set({
           queue: [],
           baseQueue: [],
@@ -321,7 +359,7 @@ export function createPlayerStore(deps: PlayerDeps): PlayerStore {
     };
   });
 
-  deps.controller.setVolume(store.getState().volume);
+  deps.engine.setVolume(store.getState().volume);
   return store;
 }
 
@@ -338,10 +376,9 @@ function shuffleIds(ids: readonly Id[], random: () => number): Id[] {
 
 function readStoredVolume(): number {
   try {
-    const value = Number(localStorage.getItem(VOLUME_KEY));
-    if (Number.isFinite(value) && value >= 0 && value <= 1 && localStorage.getItem(VOLUME_KEY)) {
-      return value;
-    }
+    const stored = localStorage.getItem(VOLUME_KEY);
+    const value = Number(stored);
+    if (stored && Number.isFinite(value) && value >= 0 && value <= 1) return value;
   } catch {
     // ignore
   }

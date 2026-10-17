@@ -1,21 +1,27 @@
-import type { Follow, ListenEvent, Playlist, TasteProfile, Track } from '@weegood/core';
+import type { Artist, Follow, ListenEvent, MeasuredVibe, Playlist, Track } from '@weegood/core';
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 
 /**
- * IndexedDB schema (ADR 0004). Bump `DB_VERSION` and add a migration step in `upgrade` when the
- * shape changes; never edit a shipped version's stores in place.
+ * IndexedDB schema (ADR 0004). Bump `DB_VERSION` and add a step in `upgrade` when the shape
+ * changes; never edit a shipped version's stores in place.
+ *
+ * v1: profile, playlists, follows, localTracks, audioBlobs, listens.
+ * v2: tracks (streamed track cache), artists (cache), measuredVibes (on-device analysis).
  */
 export interface WeegoodDB extends DBSchema {
-  profile: { key: string; value: TasteProfile };
+  profile: { key: string; value: unknown };
   playlists: { key: string; value: Playlist; indexes: { byUpdatedAt: number } };
   follows: { key: string; value: Follow };
   localTracks: { key: string; value: Track };
+  tracks: { key: string; value: Track };
+  artists: { key: string; value: Artist };
+  measuredVibes: { key: string; value: MeasuredVibe };
   audioBlobs: { key: string; value: Blob };
   listens: { key: number; value: ListenEvent; indexes: { byStartedAt: number } };
 }
 
 export const DB_NAME = 'weegood';
-export const DB_VERSION = 1;
+export const DB_VERSION = 2;
 
 export type WeegoodDatabase = IDBPDatabase<WeegoodDB>;
 
@@ -31,6 +37,11 @@ export function openWeegoodDB(name: string = DB_NAME): Promise<WeegoodDatabase> 
         db.createObjectStore('audioBlobs');
         const listens = db.createObjectStore('listens', { autoIncrement: true });
         listens.createIndex('byStartedAt', 'startedAt');
+      }
+      if (oldVersion < 2) {
+        db.createObjectStore('tracks', { keyPath: 'id' });
+        db.createObjectStore('artists', { keyPath: 'id' });
+        db.createObjectStore('measuredVibes', { keyPath: 'trackId' });
       }
     },
   });

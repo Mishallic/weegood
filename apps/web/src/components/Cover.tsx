@@ -5,14 +5,15 @@ import { Icon } from './Icon';
 interface CoverProps {
   title: string;
   hue: number;
+  /** Artwork URL. Falls back to a generated gradient with the first letter. */
+  src?: string | null | undefined;
   size?: number | string;
   playing?: boolean;
   paused?: boolean;
   className?: string;
 }
 
-/** Generated cover art: a gradient from a stable hue and the first letter of the title. */
-export function Cover({ title, hue, size = 48, playing, paused, className }: CoverProps) {
+export function Cover({ title, hue, src, size = 48, playing, paused, className }: CoverProps) {
   const style = {
     '--hue': hue,
     '--size': typeof size === 'number' ? `${size}px` : size,
@@ -20,6 +21,7 @@ export function Cover({ title, hue, size = 48, playing, paused, className }: Cov
   const active = playing || paused;
   return (
     <span className={cx('cover', active && 'cover--playing', className)} style={style} aria-hidden>
+      {src && <img className="cover__img" src={src} alt="" loading="lazy" decoding="async" />}
       {active ? (
         <span
           className={cx('eq', paused && 'eq--paused')}
@@ -29,7 +31,7 @@ export function Cover({ title, hue, size = 48, playing, paused, className }: Cov
           <span />
           <span />
         </span>
-      ) : title.trim() ? (
+      ) : src ? null : title.trim() ? (
         title.trim()[0]?.toUpperCase()
       ) : (
         <Icon name="music" />
