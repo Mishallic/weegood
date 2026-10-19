@@ -34,6 +34,7 @@ Each item has a one-line summary so the list is readable without opening tickets
 - [x] **P1** Search across Audius tracks, artists and playlists plus local files and own playlists.
 - [x] **P1** Settings: profile and model insight, export and import with referenced tracks, reset.
 - [x] **P1** Keyboard shortcuts and Media Session API.
+- [x] **P1** Queue drawer: add from any track or card, play next, remove, reorder by drag or buttons, clear, save as a playlist.
 - [ ] **P2** Drag-and-drop reordering in playlists (move buttons exist today).
 - [ ] **P2** Read ID3 and Vorbis tags from imported files instead of inferring from file names.
 

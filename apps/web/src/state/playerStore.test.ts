@@ -75,6 +75,7 @@ function setup() {
 }
 
 const IDS = ['lux-marlowe-1', 'lux-marlowe-2', 'lux-marlowe-3'];
+const FIVE = [...IDS, 'honeyglass-1', 'honeyglass-2'];
 const tick = () => new Promise((resolve) => setTimeout(resolve, 5));
 
 describe('playerStore', () => {
@@ -200,6 +201,48 @@ describe('playerStore', () => {
     expect(store.getState().queue).toEqual(['lux-marlowe-1', 'lux-marlowe-3', 'lux-marlowe-2']);
     store.getState().removeFromQueue(1);
     expect(store.getState().queue).toEqual(['lux-marlowe-1', 'lux-marlowe-2']);
+  });
+
+  it('reorders the queue while the current track keeps its place in playback', async () => {
+    const { store } = setup();
+    await store.getState().playQueue(FIVE, 2);
+    expect(store.getState().currentTrackId).toBe('lux-marlowe-3');
+
+    store.getState().moveInQueue(4, 0);
+    expect(store.getState().queue).toEqual([
+      'honeyglass-2',
+      'lux-marlowe-1',
+      'lux-marlowe-2',
+      'lux-marlowe-3',
+      'honeyglass-1',
+    ]);
+    expect(store.getState().index).toBe(3);
+    expect(store.getState().currentTrackId).toBe('lux-marlowe-3');
+
+    store.getState().moveInQueue(3, 0);
+    expect(store.getState().queue[0]).toBe('lux-marlowe-3');
+    expect(store.getState().index).toBe(0);
+
+    store.getState().moveInQueue(1, 4);
+    expect(store.getState().index).toBe(0);
+    expect(store.getState().baseQueue).toEqual(store.getState().queue);
+    store.getState().moveInQueue(0, 9);
+    expect(store.getState().index).toBe(0);
+  });
+
+  it('clears everything except the playing track, or stops when idle', async () => {
+    const { store, engine } = setup();
+    await store.getState().playQueue(FIVE, 1);
+    store.getState().clearUpcoming();
+    expect(store.getState().queue).toEqual(['lux-marlowe-2']);
+    expect(store.getState().index).toBe(0);
+    expect(store.getState().status).toBe('playing');
+    expect(engine.pauses).toBe(0);
+
+    const idle = setup();
+    idle.store.getState().clearUpcoming();
+    expect(idle.store.getState().status).toBe('idle');
+    expect(idle.store.getState().queue).toEqual([]);
   });
 
   it('toggles play and pause and clamps seek and volume', async () => {

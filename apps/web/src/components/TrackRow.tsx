@@ -31,14 +31,23 @@ export function TrackRow({
   const isCurrent = usePlayer((state) => state.currentTrackId === track.id);
   const status = usePlayer((state) => state.status);
   const togglePlay = usePlayer((state) => state.togglePlay);
+  const enqueue = usePlayer((state) => state.enqueue);
   const liked = useApp((state) => state.profile?.likedTrackIds.includes(track.id) ?? false);
   const toggleLike = useApp((state) => state.toggleLike);
+  const rememberTracks = useApp((state) => state.rememberTracks);
+  const notify = useApp((state) => state.notify);
   const playing = isCurrent && status === 'playing';
   const paused = isCurrent && !playing;
 
   const activate = () => {
     if (isCurrent) void togglePlay();
     else onPlay();
+  };
+
+  const addToQueue = () => {
+    rememberTracks([track]);
+    enqueue([track.id]);
+    notify('Added to queue');
   };
 
   return (
@@ -105,6 +114,14 @@ export function TrackRow({
             onClick={onMoveDown}
           />
         )}
+        <Button
+          variant="ghost"
+          size="sm"
+          icon="queue"
+          iconOnly
+          label={`Add ${track.title} to queue`}
+          onClick={addToQueue}
+        />
         <Button
           variant="ghost"
           size="sm"

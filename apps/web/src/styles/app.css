@@ -1252,36 +1252,6 @@ dialog.dialog::backdrop {
   }
 }
 
-.queue-panel {
-  position: fixed;
-  right: var(--space-4);
-  bottom: calc(var(--player-height) + var(--space-3));
-  width: min(360px, calc(100vw - 32px));
-  max-height: 60vh;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  padding: var(--space-3);
-  border-radius: var(--radius-lg);
-  background: var(--bg-elev);
-  border: 1px solid var(--border);
-  box-shadow: var(--shadow-md);
-  z-index: 30;
-  overflow: hidden;
-}
-
-.queue-panel__list {
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-}
-
-@media (max-width: 760px) {
-  .queue-panel {
-    bottom: calc(var(--player-height) + var(--bottom-nav-height) + var(--space-3));
-  }
-}
-
 /* ------------------------------------------------------------------ onboarding */
 .onboarding {
   min-height: 100dvh;
@@ -1463,4 +1433,130 @@ dialog.dialog::backdrop {
 .avatar {
   position: relative;
   overflow: hidden;
+}
+
+/* ------------------------------------------------------------------ drawer (queue) */
+.drawer-backdrop {
+  position: fixed;
+  inset: 0 0 var(--player-height) 0;
+  background: rgb(0 0 0 / 0.35);
+  z-index: 40;
+}
+
+.drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: var(--player-height);
+  width: min(440px, 100vw);
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-elev);
+  border-left: 1px solid var(--border);
+  box-shadow: var(--shadow-md);
+  z-index: 41;
+  animation: drawer-in var(--duration) var(--ease);
+}
+
+.drawer__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border);
+}
+
+.drawer__body {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-2) var(--space-3) var(--space-5);
+}
+
+@media (max-width: 760px) {
+  .drawer-backdrop {
+    inset: 0 0 calc(var(--player-height) + var(--bottom-nav-height)) 0;
+  }
+
+  .drawer {
+    bottom: calc(var(--player-height) + var(--bottom-nav-height));
+    width: 100vw;
+    border-left: 0;
+  }
+}
+
+@keyframes drawer-in {
+  from {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+.queue-label {
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--fg-faint);
+  padding: var(--space-3) var(--space-2) var(--space-1);
+}
+
+.queue-row {
+  grid-template-columns: 20px 40px minmax(0, 1fr) auto auto;
+}
+
+.queue-row[draggable='true'] {
+  cursor: grab;
+}
+
+.queue-row--dragging {
+  opacity: 0.5;
+}
+
+.queue-row--over {
+  box-shadow: inset 0 2px 0 var(--accent);
+}
+
+.queue-row--played {
+  opacity: 0.6;
+}
+
+.badge-anchor {
+  position: relative;
+  display: inline-flex;
+}
+
+.count-badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 10px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.track-card__queue {
+  position: absolute;
+  left: 20px;
+  top: 20px;
+  opacity: 0;
+  transition: opacity var(--duration);
+  background: var(--bg-elev);
+}
+
+.track-card:hover .track-card__queue,
+.track-card:focus-within .track-card__queue {
+  opacity: 1;
 }

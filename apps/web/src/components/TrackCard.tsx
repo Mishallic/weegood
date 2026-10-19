@@ -1,5 +1,5 @@
 import type { Recommendation } from '@weegood/core';
-import { usePlayer } from '../app/storesContext';
+import { useApp, usePlayer } from '../app/storesContext';
 import { trackHue } from '../lib/hue';
 import { Button } from './Button';
 import { Cover } from './Cover';
@@ -15,6 +15,9 @@ export function TrackCard({ recommendation, onPlay }: TrackCardProps) {
   const isCurrent = usePlayer((state) => state.currentTrackId === track.id);
   const status = usePlayer((state) => state.status);
   const togglePlay = usePlayer((state) => state.togglePlay);
+  const enqueue = usePlayer((state) => state.enqueue);
+  const rememberTracks = useApp((state) => state.rememberTracks);
+  const notify = useApp((state) => state.notify);
   const playing = isCurrent && status === 'playing';
 
   return (
@@ -26,6 +29,19 @@ export function TrackCard({ recommendation, onPlay }: TrackCardProps) {
         size="100%"
         playing={playing}
         paused={isCurrent && !playing}
+      />
+      <Button
+        className="track-card__queue"
+        variant="outline"
+        size="sm"
+        icon="queue"
+        iconOnly
+        label={`Add ${track.title} to queue`}
+        onClick={() => {
+          rememberTracks([track]);
+          enqueue([track.id]);
+          notify('Added to queue');
+        }}
       />
       <Button
         className="track-card__play"

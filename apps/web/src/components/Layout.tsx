@@ -7,6 +7,7 @@ import { Button } from './Button';
 import { PromptDialog } from './Dialog';
 import { Icon, type IconName } from './Icon';
 import { PlayerBar } from './PlayerBar';
+import { QueueDrawer } from './QueueDrawer';
 
 const NAV: Array<{ href: string; label: string; icon: IconName }> = [
   { href: '/', label: 'Home', icon: 'home' },
@@ -131,7 +132,7 @@ export function Layout({ children }: { children: ReactNode }) {
           {playlists.slice(0, 12).map((playlist) => (
             <Link
               key={playlist.id}
-              href={`/playlist/${playlist.id}`}
+              href={`/playlist/${encodeURIComponent(playlist.id)}`}
               className="sidebar__playlist truncate"
             >
               {playlist.name}
@@ -153,6 +154,7 @@ export function Layout({ children }: { children: ReactNode }) {
       </main>
 
       <PlayerBar />
+      <QueueDrawer />
 
       <NavLinks location={location} className="bottom-nav" />
 
@@ -166,7 +168,7 @@ export function Layout({ children }: { children: ReactNode }) {
         onClose={() => setPromptOpen(false)}
         onConfirm={(name) => {
           void createPlaylist(name).then((playlist) => {
-            if (playlist) navigate(`/playlist/${playlist.id}`);
+            if (playlist) navigate(`/playlist/${encodeURIComponent(playlist.id)}`);
           });
         }}
       />

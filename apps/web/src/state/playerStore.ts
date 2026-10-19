@@ -52,6 +52,10 @@ export interface PlayerState {
   enqueue(trackIds: readonly Id[]): number;
   playNext(trackId: Id): void;
   removeFromQueue(position: number): void;
+  /** Reorder the queue. The current track keeps playing wherever it lands. */
+  moveInQueue(from: number, to: number): void;
+  /** Drop everything except the track that is playing. Stops when nothing is. */
+  clearUpcoming(): void;
   jumpTo(position: number): Promise<void>;
   togglePlay(): Promise<void>;
   next(): Promise<void>;
@@ -263,6 +267,30 @@ export function createPlayerStore(deps: PlayerDeps): PlayerStore {
         const nextBase =
           baseIndex >= 0 ? get().baseQueue.filter((_, i) => i !== baseIndex) : get().baseQueue;
         set({ queue: nextQueue, baseQueue: nextBase, index: position < index ? index - 1 : index });
+      },
+
+      moveInQueue(from, to) {
+        const { queue, index, shuffle } = get();
+        if (from === to || from < 0 || to < 0 || from >= queue.length || to >= queue.length) return;
+        const next = [...queue];
+        const [moved] = next.splice(from, 1);
+        if (moved === undefined) return;
+        next.splice(to, 0, moved);
+        let nextIndex = index;
+        if (index === from) nextIndex = to;
+        else if (from < index && to >= index) nextIndex = index - 1;
+        else if (from > index && to <= index) nextIndex = index + 1;
+        set({ queue: next, index: nextIndex, baseQueue: shuffle ? get().baseQueue : [...next] });
+      },
+
+      clearUpcoming() {
+        const { queue, index } = get();
+        const current = queue[index];
+        if (current === undefined) {
+          get().stop();
+          return;
+        }
+        set({ queue: [current], baseQueue: [current], index: 0 });
       },
 
       async jumpTo(position) {

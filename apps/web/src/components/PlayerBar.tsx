@@ -5,7 +5,6 @@ import { useApp, usePlayer, useStores } from '../app/storesContext';
 import { trackHue } from '../lib/hue';
 import { Button } from './Button';
 import { Cover } from './Cover';
-import { QueuePanel } from './QueuePanel';
 
 export function PlayerBar() {
   const { resolveTrack } = useStores();
@@ -19,6 +18,7 @@ export function PlayerBar() {
   const contextLabel = usePlayer((state) => state.contextLabel);
   const error = usePlayer((state) => state.error);
   const queueOpen = usePlayer((state) => state.queueOpen);
+  const upcomingCount = usePlayer((state) => Math.max(0, state.queue.length - state.index - 1));
   const togglePlay = usePlayer((state) => state.togglePlay);
   const next = usePlayer((state) => state.next);
   const previous = usePlayer((state) => state.previous);
@@ -167,19 +167,23 @@ export function PlayerBar() {
             aria-label="Volume"
             style={{ '--fill': `${volume * 100}%` } as CSSProperties}
           />
-          <Button
-            variant="ghost"
-            size="sm"
-            icon="queue"
-            iconOnly
-            label="Queue"
-            active={queueOpen}
-            aria-pressed={queueOpen}
-            onClick={toggleQueue}
-          />
+          <span className="badge-anchor">
+            <Button
+              variant="ghost"
+              size="sm"
+              icon="queue"
+              iconOnly
+              label={upcomingCount > 0 ? `Queue, ${upcomingCount} up next` : 'Queue'}
+              active={queueOpen}
+              aria-pressed={queueOpen}
+              onClick={toggleQueue}
+            />
+            {upcomingCount > 0 && (
+              <span className="count-badge">{upcomingCount > 99 ? '99+' : upcomingCount}</span>
+            )}
+          </span>
         </div>
       </div>
-      {queueOpen && <QueuePanel />}
     </footer>
   );
 }

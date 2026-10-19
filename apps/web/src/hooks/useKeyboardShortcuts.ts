@@ -4,7 +4,7 @@ import { useStores } from '../app/storesContext';
 export const SEARCH_INPUT_ID = 'weegood-search';
 const SEEK_STEP_MS = 10_000;
 
-/** Space or K: play/pause. J/L or arrows: seek 10 s. N/P: next/previous. M: mute. /: search. */
+/** Space or K: play/pause. J/L or arrows: seek 10 s. N/P: next/previous. M: mute. Q: queue. /: search. */
 export function useKeyboardShortcuts(): void {
   const { usePlayer } = useStores();
 
@@ -46,6 +46,9 @@ export function useKeyboardShortcuts(): void {
           break;
         case 'm':
           player.setVolume(player.volume > 0 ? 0 : 0.8);
+          break;
+        case 'q':
+          player.toggleQueue();
           break;
         default:
           break;
