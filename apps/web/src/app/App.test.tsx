@@ -28,7 +28,7 @@ describe('App', () => {
   afterEach(cleanup);
 
   it('sends a new visitor to onboarding', async () => {
-    const stores = createStores(createTestServices(), noopEngine);
+    const stores = createStores(createTestServices(), noopEngine, { persistKey: null });
     void stores.useApp.getState().hydrate();
     render(
       <StoresProvider stores={stores}>
@@ -48,7 +48,7 @@ describe('App', () => {
         Date.now(),
       ),
     );
-    const stores = createStores(services, noopEngine);
+    const stores = createStores(services, noopEngine, { persistKey: null });
     void stores.useApp.getState().hydrate();
     render(
       <StoresProvider stores={stores}>

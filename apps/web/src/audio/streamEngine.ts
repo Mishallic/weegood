@@ -121,6 +121,7 @@ export class StreamEngine implements PlaybackEngine {
     this.audio.volume = this.volume;
     this.attach(this.audio);
     this.onTime();
+    if (this.audio.readyState >= 1) this.onReady();
   }
 
   private attach(audio: HTMLAudioElement): void {
@@ -128,6 +129,7 @@ export class StreamEngine implements PlaybackEngine {
     audio.volume = this.volume;
     audio.addEventListener('timeupdate', this.onTime);
     audio.addEventListener('durationchange', this.onTime);
+    audio.addEventListener('loadedmetadata', this.onReady);
     audio.addEventListener('play', this.onPlay);
     audio.addEventListener('pause', this.onPause);
     audio.addEventListener('ended', this.onEnded);
@@ -137,6 +139,7 @@ export class StreamEngine implements PlaybackEngine {
   private detach(audio: HTMLAudioElement): void {
     audio.removeEventListener('timeupdate', this.onTime);
     audio.removeEventListener('durationchange', this.onTime);
+    audio.removeEventListener('loadedmetadata', this.onReady);
     audio.removeEventListener('play', this.onPlay);
     audio.removeEventListener('pause', this.onPause);
     audio.removeEventListener('ended', this.onEnded);
@@ -145,6 +148,13 @@ export class StreamEngine implements PlaybackEngine {
 
   private onTime = (): void => {
     this.emitter.set({ positionMs: this.audio.currentTime * 1000, durationMs: this.durationMs() });
+  };
+
+  /** A loaded track that nobody pressed play on is paused, not loading. */
+  private onReady = (): void => {
+    if (this.emitter.value.status === 'loading' && this.audio.paused) {
+      this.emitter.set({ status: 'paused', durationMs: this.durationMs() });
+    }
   };
 
   private onPlay = (): void => this.emitter.set({ status: 'playing', error: null });

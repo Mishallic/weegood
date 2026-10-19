@@ -17,6 +17,8 @@ New decisions get the next number. Accepted ADRs are not edited; write a new one
 | [0010](0010-real-music-from-streaming-providers.md)                 | Real music from streaming providers, Audius first                  | Accepted                  |
 | [0011](0011-on-device-learned-ranking-and-audio-analysis.md)        | On-device learned ranking and audio analysis                       | Accepted                  |
 | [0012](0012-deploy-web-app-to-github-pages.md)                      | Deploy the web app to GitHub Pages                                 | Accepted                  |
-| [0013](0013-editorial-visual-identity.md)                           | An editorial visual identity, painted by taste                     | Accepted                  |
+| [0013](0013-editorial-visual-identity.md)                           | An editorial visual identity, painted by taste                     | Accepted, amended by 0014 |
+| [0014](0014-record-mark-and-louder-page.md)                         | A record for a mark, and a louder page                             | Accepted                  |
+| [0015](0015-queue-persisted-on-device.md)                           | The queue lives on the device, and a listen starts at play         | Accepted                  |
 
 Template: [0000-template.md](0000-template.md).

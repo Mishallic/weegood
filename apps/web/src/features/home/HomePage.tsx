@@ -7,6 +7,7 @@ import {
   recommendArtists,
   topGenreIds,
   type Artist,
+  type Genre,
 } from '@weegood/core';
 import { useMemo, useState } from 'react';
 import { Link } from 'wouter';
@@ -27,6 +28,52 @@ import { isDefined } from '../../lib/isDefined';
 export function HomePage() {
   const [refreshKey, setRefreshKey] = useState(0);
   return <HomeFeed key={refreshKey} onRefresh={() => setRefreshKey((k) => k + 1)} />;
+}
+
+/** "Good afternoon." with the first word roman and the rest italic, and a vermilion full stop. */
+function PosterGreeting({ greeting }: { greeting: string }) {
+  const trimmed = greeting.replace(/[.?]$/, '');
+  const punctuation = greeting.endsWith('?') ? '?' : '.';
+  const [first, ...rest] = trimmed.split(' ');
+  return (
+    <h1>
+      {first}
+      {rest.length > 0 && (
+        <>
+          {' '}
+          <em>{rest.join(' ')}</em>
+        </>
+      )}
+      <span className="dot">{punctuation}</span>
+    </h1>
+  );
+}
+
+/** One honest sentence about where the taste model stands. */
+function vibeSentence(
+  words: string[],
+  topGenre: Genre | undefined,
+  listenCount: number,
+): { lead: string; highlight: string; tail: string } {
+  if (words.length === 1 && words[0] === 'balanced' && listenCount < 5) {
+    return {
+      lead: 'Your vibe is still ',
+      highlight: 'forming',
+      tail: '. Play a few things and watch it sharpen.',
+    };
+  }
+  const joined =
+    words.length > 1
+      ? `${words.slice(0, -1).join(', ')} and ${words[words.length - 1]}`
+      : (words[0] ?? 'balanced');
+  return {
+    lead: 'Right now you read ',
+    highlight: joined,
+    tail:
+      topGenre && !words.includes(topGenre.name.toLowerCase())
+        ? `, leaning ${topGenre.name}.`
+        : '.',
+  };
 }
 
 /**
@@ -74,11 +121,12 @@ function HomeFeed({ onRefresh }: { onRefresh: () => void }) {
   const topGenres = topGenreIds(liveProfile ?? createEmptyProfile(0), 3)
     .map((id) => genreById(id))
     .filter(isDefined);
+  const sentence = vibeSentence(vibeWords, topGenres[0], liveProfile?.listenCount ?? 0);
   const disliked = new Set(dislikedIds);
 
   return (
     <div className="page">
-      <header className="page-header">
+      <header className="page-header page-header--poster">
         <VibeAura vibe={currentVibe} />
         <div className="page-header__text">
           <span className="eyebrow">
@@ -88,9 +136,11 @@ function HomeFeed({ onRefresh }: { onRefresh: () => void }) {
               month: 'long',
             })}
           </span>
-          <h1>{greetingForHour(new Date().getHours())}.</h1>
-          <p>
-            Your vibe right now reads <strong>{vibeWords.join(', ')}</strong>.
+          <PosterGreeting greeting={greetingForHour(new Date().getHours())} />
+          <p className="poster-lead">
+            {sentence.lead}
+            <span className="swash">{sentence.highlight}</span>
+            {sentence.tail}
           </p>
           {topGenres.length > 0 && (
             <div className="chip-row">

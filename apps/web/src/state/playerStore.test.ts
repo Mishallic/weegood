@@ -1,5 +1,5 @@
 import { createCatalogIndex, DEMO_CATALOG, type ListenEvent, type Track } from '@weegood/core';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import type { EngineSnapshot } from '../audio/engine';
 import { createPlayerStore, type PlaybackEngineLike } from './playerStore';
 
@@ -32,7 +32,7 @@ class FakeEngine implements PlaybackEngineLike {
   }
   seek(positionMs: number): void {
     this.seeks.push(positionMs);
-    this.emit({ positionMs });
+    this.emit({ positionMs, status: this.plays > this.pauses ? 'playing' : 'paused' });
   }
   setVolume(volume: number): void {
     this.volume = volume;
@@ -57,26 +57,35 @@ class FakeEngine implements PlaybackEngineLike {
   }
 }
 
-function setup() {
+function setup(persistKey: string | null = null) {
   const engine = new FakeEngine();
   const listens: Array<{ track: Track; event: ListenEvent }> = [];
   const starts: Array<{ track: Track; next: Track | null }> = [];
+  const ensured: string[][] = [];
   const store = createPlayerStore({
     engine,
     resolveTrack: (id) => index.tracksById.get(id),
     loadBlob: async () => null,
     onListen: (track, event) => listens.push({ track, event }),
     onTrackStart: (track, next) => starts.push({ track, next }),
+    ensureTracks: async (ids) => {
+      ensured.push([...ids]);
+    },
     now: () => NOW,
     random: () => 0.5,
     errorSkipDelayMs: 0,
+    persistKey,
   });
-  return { engine, store, listens, starts };
+  return { engine, store, listens, starts, ensured };
 }
 
 const IDS = ['lux-marlowe-1', 'lux-marlowe-2', 'lux-marlowe-3'];
 const FIVE = [...IDS, 'honeyglass-1', 'honeyglass-2'];
 const tick = () => new Promise((resolve) => setTimeout(resolve, 5));
+
+beforeEach(() => {
+  localStorage.clear();
+});
 
 describe('playerStore', () => {
   it('plays a queue from the chosen index and announces the start with the next track', async () => {
@@ -268,5 +277,56 @@ describe('playerStore', () => {
     expect(store.getState().queue).toEqual([]);
     expect(store.getState().currentTrackId).toBeNull();
     expect(store.getState().status).toBe('idle');
+  });
+
+  it('saves the queue and restores it paused at the same spot in a new session', async () => {
+    const first = setup('test:player');
+    await first.store.getState().playQueue(FIVE, 1, 'Late Study');
+    first.store.getState().cycleRepeat();
+    first.engine.emit({ positionMs: 61_000 });
+    window.dispatchEvent(new Event('pagehide'));
+
+    const saved = JSON.parse(localStorage.getItem('test:player') ?? '{}') as {
+      queue: string[];
+      index: number;
+      positionMs: number;
+    };
+    expect(saved.queue).toEqual(FIVE);
+    expect(saved.index).toBe(1);
+    expect(saved.positionMs).toBe(61_000);
+
+    const second = setup('test:player');
+    await second.store.getState().restore();
+    expect(second.ensured[0]).toEqual(FIVE);
+    expect(second.store.getState().queue).toEqual(FIVE);
+    expect(second.store.getState().index).toBe(1);
+    expect(second.store.getState().currentTrackId).toBe('lux-marlowe-2');
+    expect(second.store.getState().repeat).toBe('all');
+    expect(second.store.getState().contextLabel).toBe('Late Study');
+    expect(second.store.getState().status).toBe('paused');
+    expect(second.engine.plays).toBe(0);
+    expect(second.engine.seeks).toEqual([61_000]);
+    expect(second.store.getState().positionMs).toBe(61_000);
+  });
+
+  it('does not restore over an active queue or from an empty or damaged save', async () => {
+    localStorage.setItem('test:player', 'not json');
+    const broken = setup('test:player');
+    await broken.store.getState().restore();
+    expect(broken.store.getState().currentTrackId).toBeNull();
+
+    localStorage.setItem(
+      'test:player',
+      JSON.stringify({ queue: ['nope'], baseQueue: ['nope'], index: 0 }),
+    );
+    const unresolvable = setup('test:player');
+    await unresolvable.store.getState().restore();
+    expect(unresolvable.store.getState().queue).toEqual([]);
+
+    const active = setup('test:player');
+    await active.store.getState().playQueue(IDS, 2);
+    localStorage.setItem('test:player', JSON.stringify({ queue: FIVE, baseQueue: FIVE, index: 0 }));
+    await active.store.getState().restore();
+    expect(active.store.getState().currentTrackId).toBe('lux-marlowe-3');
   });
 });

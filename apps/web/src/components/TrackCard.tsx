@@ -1,5 +1,6 @@
 import type { Recommendation } from '@weegood/core';
 import { useApp, usePlayer } from '../app/storesContext';
+import { cx } from '../lib/cx';
 import { trackHue } from '../lib/hue';
 import { Button } from './Button';
 import { Cover } from './Cover';
@@ -7,10 +8,12 @@ import { Cover } from './Cover';
 interface TrackCardProps {
   recommendation: Recommendation;
   onPlay: () => void;
+  /** Wide lead card at the head of a row. */
+  lead?: boolean;
 }
 
 /** A sleeve on the shelf: artwork, title, artist and the reason it was picked, set as a caption. */
-export function TrackCard({ recommendation, onPlay }: TrackCardProps) {
+export function TrackCard({ recommendation, onPlay, lead = false }: TrackCardProps) {
   const { track, reasons } = recommendation;
   const isCurrent = usePlayer((state) => state.currentTrackId === track.id);
   const status = usePlayer((state) => state.status);
@@ -21,7 +24,7 @@ export function TrackCard({ recommendation, onPlay }: TrackCardProps) {
   const playing = isCurrent && status === 'playing';
 
   return (
-    <div className="track-card">
+    <div className={cx('track-card', lead && 'track-card--lead')}>
       <Cover
         title={track.title}
         hue={trackHue(track)}

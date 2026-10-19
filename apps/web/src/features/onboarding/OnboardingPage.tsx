@@ -18,6 +18,7 @@ import { useApp, useServices } from '../../app/storesContext';
 import { Avatar } from '../../components/Avatar';
 import { Button } from '../../components/Button';
 import { Icon } from '../../components/Icon';
+import { Logo } from '../../components/Logo';
 import { VibeAura } from '../../components/VibeAura';
 import { useQuery } from '../../hooks/useQuery';
 import { hueFor } from '../../lib/hue';
@@ -138,16 +139,7 @@ export function OnboardingPage() {
       <VibeAura vibe={selectionVibe} className="vibe-aura--page" />
       <div className="onboarding__card">
         <div className="row" style={{ justifyContent: 'space-between' }}>
-          <div className="brand" style={{ padding: 0 }}>
-            <img
-              className="brand__mark"
-              src={`${import.meta.env.BASE_URL}favicon.svg`}
-              alt=""
-              width={22}
-              height={22}
-            />
-            <span>Weegood</span>
-          </div>
+          <Logo size="lg" />
           {stepIndex > 0 && stepIndex < 3 && (
             <span className="eyebrow">
               Your vibe so far:{' '}

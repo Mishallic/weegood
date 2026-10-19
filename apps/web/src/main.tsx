@@ -15,8 +15,8 @@ const stores = createStores(services, createBrowserEngine(services));
 // Served under a subpath on GitHub Pages; the router must strip and prefix the same base.
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 
-// Hydrate once, outside React, so StrictMode's double effects do not load twice.
-void stores.useApp.getState().hydrate();
+// Boot once, outside React, so StrictMode's double effects do not load twice.
+void stores.boot();
 
 const root = document.getElementById('root');
 if (!root) throw new Error('Missing #root element');

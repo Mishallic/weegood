@@ -11,13 +11,24 @@ export interface Stores {
   usePlayer: PlayerStore;
   /** Streamed tracks from the cache and imported local tracks, by id. */
   resolveTrack: (id: Id) => Track | undefined;
+  /** Load persisted data, then bring back last session's queue. Call once at startup. */
+  boot: () => Promise<void>;
 }
 
 export function createBrowserEngine(services: Services): StreamEngine {
   return new StreamEngine({ streamUrlFor: (track) => services.music.streamUrl(track) });
 }
 
-export function createStores(services: Services, engine: PlaybackEngineLike): Stores {
+export interface CreateStoresOptions {
+  /** localStorage key for the saved queue; null disables persistence (tests). */
+  persistKey?: string | null;
+}
+
+export function createStores(
+  services: Services,
+  engine: PlaybackEngineLike,
+  options: CreateStoresOptions = {},
+): Stores {
   const useApp = createAppStore(services);
   const resolveTrack = (id: Id): Track | undefined => useApp.getState().getTrack(id);
 
@@ -25,7 +36,9 @@ export function createStores(services: Services, engine: PlaybackEngineLike): St
     engine,
     resolveTrack,
     loadBlob: async (track) => (await services.repos.audioBlobs.get(track.id)) ?? null,
+    ensureTracks: (ids) => useApp.getState().ensureTracks(ids),
     now: services.now,
+    persistKey: options.persistKey === undefined ? 'weegood:player' : options.persistKey,
 
     onListen: (track, event) => {
       // Score the track the way the feed would have, so the ranker learns from the outcome.
@@ -64,5 +77,10 @@ export function createStores(services: Services, engine: PlaybackEngineLike): St
     },
   });
 
-  return { services, useApp, usePlayer, resolveTrack };
+  const boot = async (): Promise<void> => {
+    await useApp.getState().hydrate();
+    await usePlayer.getState().restore();
+  };
+
+  return { services, useApp, usePlayer, resolveTrack, boot };
 }

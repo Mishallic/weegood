@@ -6,6 +6,7 @@ import { cx } from '../lib/cx';
 import { Button } from './Button';
 import { PromptDialog } from './Dialog';
 import { Icon, type IconName } from './Icon';
+import { Logo } from './Logo';
 import { PlayerBar } from './PlayerBar';
 import { QueueDrawer } from './QueueDrawer';
 
@@ -40,21 +41,6 @@ function NavLinks({ location, className }: { location: string; className: string
         );
       })}
     </nav>
-  );
-}
-
-function Brand({ compact = false }: { compact?: boolean }) {
-  return (
-    <Link href="/" className="brand" aria-label="Weegood home">
-      <img
-        className="brand__mark"
-        src={`${import.meta.env.BASE_URL}favicon.svg`}
-        alt=""
-        width={22}
-        height={22}
-      />
-      {!compact && <span>Weegood</span>}
-    </Link>
   );
 }
 
@@ -107,10 +93,9 @@ export function Layout({ children }: { children: ReactNode }) {
   return (
     <div className="app">
       <aside className="sidebar">
-        <div className="stack" style={{ gap: 0 }}>
-          <Brand />
-          <span className="eyebrow brand__tag">the listening room</span>
-        </div>
+        <Link href="/" className="sidebar__brand" aria-label="Weegood home">
+          <Logo size="lg" />
+        </Link>
         <NavLinks location={location} className="nav" />
         <div className="sidebar__section">
           <div className="row">
@@ -140,6 +125,7 @@ export function Layout({ children }: { children: ReactNode }) {
             </Link>
           ))}
         </div>
+        <div className="sidebar__footer eyebrow">The listening room</div>
       </aside>
 
       <main
@@ -148,7 +134,9 @@ export function Layout({ children }: { children: ReactNode }) {
         onScroll={(event) => setScrolled(event.currentTarget.scrollTop > 8)}
       >
         <div className={cx('topbar', scrolled && 'topbar--scrolled')}>
-          <Brand compact />
+          <Link href="/" className="topbar__brand" aria-label="Weegood home">
+            <Logo size="sm" />
+          </Link>
           <SearchBox />
         </div>
         {children}

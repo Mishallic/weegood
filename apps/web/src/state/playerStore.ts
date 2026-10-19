@@ -22,10 +22,14 @@ export interface PlayerDeps {
   onListen: (track: Track, event: ListenEvent) => void;
   /** Fires once a track is loaded and about to play; `next` is what follows in the queue. */
   onTrackStart?: (track: Track, next: Track | null) => void;
+  /** Fetch tracks the saved queue references but the cache no longer holds. */
+  ensureTracks?: (ids: readonly Id[]) => Promise<unknown>;
   now: () => number;
   random?: () => number;
   /** How long to show an error before skipping to the next track. Default 1200 ms. */
   errorSkipDelayMs?: number;
+  /** localStorage key for the saved queue. Null disables persistence. Default `weegood:player`. */
+  persistKey?: string | null;
 }
 
 export interface PlayerState {
@@ -66,6 +70,8 @@ export interface PlayerState {
   cycleRepeat(): void;
   toggleQueue(): void;
   stop(): void;
+  /** Bring back the queue saved by a previous session, paused where it left off. */
+  restore(): Promise<void>;
 }
 
 export type PlayerStore = UseBoundStore<StoreApi<PlayerState>>;
@@ -76,17 +82,32 @@ interface Session {
   maxPositionMs: number;
 }
 
+interface PersistedPlayer {
+  queue: Id[];
+  baseQueue: Id[];
+  index: number;
+  shuffle: boolean;
+  repeat: RepeatMode;
+  contextLabel: string | null;
+  positionMs: number;
+}
+
 const VOLUME_KEY = 'weegood:volume';
+const DEFAULT_PERSIST_KEY = 'weegood:player';
 const PREVIOUS_RESTART_MS = 3000;
 const MAX_CONSECUTIVE_ERRORS = 3;
+const POSITION_SAVE_INTERVAL_MS = 5000;
 
 export function createPlayerStore(deps: PlayerDeps): PlayerStore {
   const random = deps.random ?? Math.random;
   const errorSkipDelayMs = deps.errorSkipDelayMs ?? 1200;
+  const persistKey = deps.persistKey === undefined ? DEFAULT_PERSIST_KEY : deps.persistKey;
   let session: Session | null = null;
   let loadSeq = 0;
   let consecutiveErrors = 0;
   let errorTimer: ReturnType<typeof setTimeout> | null = null;
+  /** True once the current track is loaded; the listen session begins at the first playing snapshot. */
+  let armed = false;
 
   const store = create<PlayerState>()((set, get) => {
     const endSession = (completed: boolean): void => {
@@ -119,6 +140,7 @@ export function createPlayerStore(deps: PlayerDeps): PlayerStore {
         return;
       }
       endSession(false);
+      armed = false;
       const seq = ++loadSeq;
       set({
         index: position,
@@ -136,10 +158,9 @@ export function createPlayerStore(deps: PlayerDeps): PlayerStore {
         }
         await deps.engine.load(track, blob);
         if (seq !== loadSeq) return;
-        session = { track, startedAt: deps.now(), maxPositionMs: 0 };
-        const nextId = get().queue[position + 1];
-        deps.onTrackStart?.(track, nextId ? (deps.resolveTrack(nextId) ?? null) : null);
+        armed = true;
         if (autoplay) await deps.engine.play();
+        else set({ status: 'paused' });
       } catch (error) {
         if (seq === loadSeq) {
           set({
@@ -149,6 +170,21 @@ export function createPlayerStore(deps: PlayerDeps): PlayerStore {
           scheduleErrorSkip();
         }
       }
+    };
+
+    /**
+     * A listen begins when sound actually starts, not when the track loads. A queue restored at
+     * startup sits loaded and paused without counting as a listen, and nothing is prefetched or
+     * analysed on behalf of a listener who has not pressed play.
+     */
+    const beginSession = (): void => {
+      if (!armed || session) return;
+      const { currentTrackId, queue, index } = get();
+      const track = currentTrackId ? deps.resolveTrack(currentTrackId) : undefined;
+      if (!track) return;
+      session = { track, startedAt: deps.now(), maxPositionMs: 0 };
+      const nextId = queue[index + 1];
+      deps.onTrackStart?.(track, nextId ? (deps.resolveTrack(nextId) ?? null) : null);
     };
 
     const advance = async (fromEnded: boolean): Promise<void> => {
@@ -180,6 +216,10 @@ export function createPlayerStore(deps: PlayerDeps): PlayerStore {
     };
 
     deps.engine.subscribe((snapshot) => {
+      if (snapshot.status === 'playing') {
+        consecutiveErrors = 0;
+        beginSession();
+      }
       if (session && snapshot.positionMs > session.maxPositionMs)
         session.maxPositionMs = snapshot.positionMs;
       if (snapshot.status === 'ended') {
@@ -188,7 +228,6 @@ export function createPlayerStore(deps: PlayerDeps): PlayerStore {
         void advance(true);
         return;
       }
-      if (snapshot.status === 'playing') consecutiveErrors = 0;
       if (snapshot.status === 'error' && get().status !== 'error') scheduleErrorSkip();
       set({
         status: snapshot.status,
@@ -371,6 +410,7 @@ export function createPlayerStore(deps: PlayerDeps): PlayerStore {
         clearErrorTimer();
         endSession(false);
         loadSeq++;
+        armed = false;
         deps.engine.pause();
         set({
           queue: [],
@@ -384,10 +424,79 @@ export function createPlayerStore(deps: PlayerDeps): PlayerStore {
           error: null,
         });
       },
+
+      async restore() {
+        const saved = readPersisted(persistKey);
+        if (!saved || saved.queue.length === 0 || get().currentTrackId) return;
+        if (deps.ensureTracks) {
+          try {
+            await deps.ensureTracks([...new Set([...saved.queue, ...saved.baseQueue])]);
+          } catch {
+            // Offline or the provider is down; restore whatever the cache still holds.
+          }
+        }
+        const queue = saved.queue.filter((id) => deps.resolveTrack(id) !== undefined);
+        if (queue.length === 0) return;
+        const baseQueue = saved.baseQueue.filter((id) => deps.resolveTrack(id) !== undefined);
+        const currentId = saved.queue[saved.index];
+        const index = Math.max(0, currentId ? queue.indexOf(currentId) : 0);
+        set({
+          queue,
+          baseQueue: baseQueue.length > 0 ? baseQueue : queue,
+          shuffle: saved.shuffle,
+          repeat: saved.repeat,
+          contextLabel: saved.contextLabel,
+        });
+        await startTrack(index, false);
+        if (saved.positionMs > 0 && get().currentTrackId === queue[index])
+          get().seek(saved.positionMs);
+      },
     };
   });
 
   deps.engine.setVolume(store.getState().volume);
+
+  if (persistKey) {
+    let last: PlayerState | null = null;
+    let lastPositionSave = 0;
+    const persist = (force: boolean): void => {
+      const state = store.getState();
+      const changed =
+        last === null ||
+        last.queue !== state.queue ||
+        last.baseQueue !== state.baseQueue ||
+        last.index !== state.index ||
+        last.shuffle !== state.shuffle ||
+        last.repeat !== state.repeat ||
+        last.contextLabel !== state.contextLabel;
+      const now = Date.now();
+      if (!force && !changed && now - lastPositionSave < POSITION_SAVE_INTERVAL_MS) return;
+      last = state;
+      lastPositionSave = now;
+      const payload: PersistedPlayer = {
+        queue: state.queue,
+        baseQueue: state.baseQueue,
+        index: state.index,
+        shuffle: state.shuffle,
+        repeat: state.repeat,
+        contextLabel: state.contextLabel,
+        positionMs: Math.round(state.positionMs),
+      };
+      try {
+        localStorage.setItem(persistKey, JSON.stringify(payload));
+      } catch {
+        // Storage unavailable; the queue lives for this session only.
+      }
+    };
+    store.subscribe(() => persist(false));
+    if (typeof window !== 'undefined') {
+      window.addEventListener('pagehide', () => persist(true));
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') persist(true);
+      });
+    }
+  }
+
   return store;
 }
 
@@ -411,4 +520,29 @@ function readStoredVolume(): number {
     // ignore
   }
   return 0.8;
+}
+
+function readPersisted(key: string | null): PersistedPlayer | null {
+  if (!key) return null;
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const value = JSON.parse(raw) as Partial<PersistedPlayer>;
+    const ids = (list: unknown): Id[] =>
+      Array.isArray(list) ? list.filter((id): id is Id => typeof id === 'string') : [];
+    const repeat: RepeatMode =
+      value.repeat === 'all' || value.repeat === 'one' ? value.repeat : 'off';
+    return {
+      queue: ids(value.queue),
+      baseQueue: ids(value.baseQueue),
+      index: typeof value.index === 'number' ? value.index : 0,
+      shuffle: Boolean(value.shuffle),
+      repeat,
+      contextLabel: typeof value.contextLabel === 'string' ? value.contextLabel : null,
+      positionMs:
+        typeof value.positionMs === 'number' && value.positionMs > 0 ? value.positionMs : 0,
+    };
+  } catch {
+    return null;
+  }
 }

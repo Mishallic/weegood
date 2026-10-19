@@ -2,6 +2,7 @@ import { formatDuration } from '@weegood/core';
 import type { CSSProperties } from 'react';
 import { Link } from 'wouter';
 import { useApp, usePlayer, useStores } from '../app/storesContext';
+import { cx } from '../lib/cx';
 import { trackHue } from '../lib/hue';
 import { Button } from './Button';
 import { Cover } from './Cover';
@@ -39,7 +40,7 @@ export function PlayerBar() {
   const progress = durationMs > 0 ? Math.min(100, (positionMs / durationMs) * 100) : 0;
 
   return (
-    <footer className="player-bar">
+    <footer className={cx('player-bar', playing && 'player-bar--playing')}>
       <div className="player">
         <div className="player__now">
           {track ? (
@@ -49,7 +50,7 @@ export function PlayerBar() {
                 hue={trackHue(track)}
                 src={track.artworkUrl}
                 vibe={track.vibe}
-                size={52}
+                size={56}
               />
               <div className="player__now-text">
                 <span className="player__title truncate">{track.title}</span>
