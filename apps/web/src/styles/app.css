@@ -418,7 +418,7 @@ img {
   border-bottom: 1px solid var(--hairline);
 }
 
-.page-header > * {
+.page-header > *:not(.vibe-aura) {
   position: relative;
   z-index: 1;
 }
@@ -940,7 +940,7 @@ img {
   border-bottom: 1px solid var(--hairline);
 }
 
-.hero > * {
+.hero > *:not(.vibe-aura) {
   position: relative;
   z-index: 1;
 }
@@ -1670,7 +1670,7 @@ dialog.dialog::backdrop {
   padding: var(--space-7) var(--space-4);
 }
 
-.onboarding > * {
+.onboarding > *:not(.vibe-aura) {
   position: relative;
   z-index: 1;
 }
