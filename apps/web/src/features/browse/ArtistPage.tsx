@@ -19,6 +19,7 @@ import { FollowButton } from '../../components/FollowButton';
 import { NotFound } from '../../components/NotFound';
 import { Section } from '../../components/Section';
 import { TrackList } from '../../components/TrackList';
+import { VibeAura } from '../../components/VibeAura';
 import { useQuery } from '../../hooks/useQuery';
 import { hueFor } from '../../lib/hue';
 import { isDefined } from '../../lib/isDefined';
@@ -98,7 +99,8 @@ export function ArtistPage() {
   return (
     <div className="page">
       <section className="hero">
-        <Avatar name={artist.name} hue={hue} src={artist.avatarUrl} size={140} />
+        <VibeAura vibe={artist.vibe} />
+        <Avatar name={artist.name} hue={hue} src={artist.avatarUrl} size={168} />
         <div className="hero__body">
           <span className="hero__kicker">
             Artist{artist.handle ? ` · @${artist.handle}` : ''}

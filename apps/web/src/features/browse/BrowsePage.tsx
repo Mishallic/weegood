@@ -7,6 +7,7 @@ import { Button } from '../../components/Button';
 import { Section } from '../../components/Section';
 import { TrackCards } from '../../components/TrackCards';
 import { useQuery } from '../../hooks/useQuery';
+import { coverGradient } from '../../lib/vibeGradient';
 
 function toItems(tracks: readonly Track[] | undefined, reason: string): Recommendation[] {
   return (tracks ?? []).map((track) => ({ track, score: track.popularity, reasons: [reason] }));
@@ -35,8 +36,11 @@ export function BrowsePage() {
     <div className="page">
       <header className="page-header">
         <div className="page-header__text">
-          <h1>Browse</h1>
-          <p className="muted">Every genre on Audius, plus what is moving this week.</p>
+          <span className="eyebrow">Browse</span>
+          <h1>Every genre, every week.</h1>
+          <p>
+            Each genre tile wears the colour of its own vibe. What is moving this week sits below.
+          </p>
         </div>
       </header>
 
@@ -47,7 +51,7 @@ export function BrowsePage() {
               key={genre.id}
               href={`/genre/${genre.id}`}
               className="tile"
-              style={{ '--hue': genre.hue } as CSSProperties}
+              style={{ '--hue': genre.hue, background: coverGradient(genre.vibe) } as CSSProperties}
             >
               <span>{genre.name}</span>
               <span className="tile__sub">{genre.description}</span>

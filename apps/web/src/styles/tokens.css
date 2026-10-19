@@ -1,20 +1,26 @@
 /*
- * Design tokens (ADR 0007). Everything visual hangs off these custom properties so a redesign is a
- * token swap, and dark and light themes are the same components with different values.
+ * Design tokens (ADR 0007, ADR 0013). Everything visual hangs off these custom properties.
+ *
+ * The identity is print: warm paper and ink, one vermilion accent, an ultramarine foil for
+ * information, a soft serif for display and a precise grotesk for the interface. Dark mode is the
+ * same sheet printed in reverse.
  */
 :root {
   color-scheme: light dark;
 
+  --font-display: 'Fraunces', 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
   --font-sans:
-    system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    'Instrument Sans', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+    sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
 
   --text-xs: 0.75rem;
-  --text-sm: 0.875rem;
-  --text-md: 1rem;
-  --text-lg: 1.25rem;
-  --text-xl: 1.75rem;
-  --text-2xl: 2.25rem;
+  --text-sm: 0.8125rem;
+  --text-md: 0.9375rem;
+  --text-lg: 1.1875rem;
+  --text-xl: 1.5rem;
+  --text-2xl: 2.125rem;
+  --text-display: clamp(2.5rem, 1.5rem + 3vw, 4.25rem);
 
   --space-1: 4px;
   --space-2: 8px;
@@ -24,77 +30,115 @@
   --space-6: 32px;
   --space-7: 48px;
 
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 16px;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 14px;
   --radius-pill: 999px;
 
-  --accent-h: 258;
-  --accent: hsl(var(--accent-h) 90% 66%);
-  --accent-strong: hsl(var(--accent-h) 85% 58%);
-  --accent-soft: hsl(var(--accent-h) 90% 66% / 0.16);
-  --on-accent: #ffffff;
-
   --duration-fast: 120ms;
-  --duration: 200ms;
-  --ease: cubic-bezier(0.2, 0, 0, 1);
+  --duration: 220ms;
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
 
-  --sidebar-width: 232px;
-  --player-height: 76px;
+  --sidebar-width: 244px;
+  --player-height: 84px;
   --bottom-nav-height: 56px;
-  --content-max: 1200px;
+  --content-max: 1180px;
+
+  /* Paper grain, baked at low alpha so it needs no blend mode. */
+  --grain: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='g'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.5 0 0 0 0 0.5 0 0 0 0 0.5 0 0 0 0.06 0'/></filter><rect width='200' height='200' filter='url(%23g)'/></svg>");
 }
 
+/* Paper */
 :root,
 :root[data-theme='light'] {
-  --bg: #f7f7f9;
-  --bg-elev: #ffffff;
-  --bg-sunken: #ededf1;
-  --fg: #15161a;
-  --fg-muted: #5c5f6a;
-  --fg-faint: #9a9da8;
-  --border: #e2e3e9;
-  --hover: rgb(0 0 0 / 0.05);
-  --active: rgb(0 0 0 / 0.09);
-  --danger: #c93c3c;
-  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.06);
-  --shadow-md: 0 8px 24px rgb(0 0 0 / 0.12);
-  --cover-sat: 60%;
-  --cover-light: 72%;
+  --bg: #f3eee4;
+  --bg-elev: #faf7f1;
+  --bg-sunken: #e8e1d3;
+  --fg: #16140f;
+  --fg-muted: #5c564b;
+  --fg-faint: #8f8779;
+  --border: rgb(22 20 15 / 0.14);
+  --hairline: rgb(22 20 15 / 0.09);
+  --hover: rgb(22 20 15 / 0.05);
+  --active: rgb(22 20 15 / 0.09);
+  --accent: #e8541e;
+  --accent-strong: #c94512;
+  --accent-text: #b63f10;
+  --accent-soft: rgb(232 84 30 / 0.14);
+  --on-accent: #faf7f1;
+  --accent-2: #2743d0;
+  --accent-2-soft: rgb(39 67 208 / 0.1);
+  --danger: #b4321f;
+  --inverse-bg: #16140f;
+  --inverse-fg: #f3eee4;
+  --inverse-muted: rgb(243 238 228 / 0.68);
+  --inverse-hairline: rgb(243 238 228 / 0.16);
+  --shadow-sm: 0 1px 2px rgb(22 20 15 / 0.08);
+  --shadow-md: 0 14px 40px rgb(22 20 15 / 0.16);
+  --aura-opacity: 0.55;
+  --cover-sat: 62%;
+  --cover-light: 46%;
 }
 
+/* Ink */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
-    --bg: #0f1115;
-    --bg-elev: #171a21;
-    --bg-sunken: #0a0b0e;
-    --fg: #eef0f4;
-    --fg-muted: #a0a4b0;
-    --fg-faint: #6b6f7b;
-    --border: #262a33;
-    --hover: rgb(255 255 255 / 0.06);
-    --active: rgb(255 255 255 / 0.1);
-    --danger: #ff6b6b;
-    --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
-    --shadow-md: 0 8px 24px rgb(0 0 0 / 0.5);
-    --cover-sat: 45%;
+    --bg: #0f0e0c;
+    --bg-elev: #171512;
+    --bg-sunken: #0a0908;
+    --fg: #f1ead9;
+    --fg-muted: #a69e8e;
+    --fg-faint: #6d675b;
+    --border: rgb(241 234 217 / 0.14);
+    --hairline: rgb(241 234 217 / 0.09);
+    --hover: rgb(241 234 217 / 0.06);
+    --active: rgb(241 234 217 / 0.1);
+    --accent: #ff6b3b;
+    --accent-strong: #ff8459;
+    --accent-text: #ff8a62;
+    --accent-soft: rgb(255 107 59 / 0.16);
+    --on-accent: #16140f;
+    --accent-2: #8ea0ff;
+    --accent-2-soft: rgb(142 160 255 / 0.14);
+    --danger: #ff7a66;
+    --inverse-bg: #f1ead9;
+    --inverse-fg: #16140f;
+    --inverse-muted: rgb(22 20 15 / 0.66);
+    --inverse-hairline: rgb(22 20 15 / 0.14);
+    --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.5);
+    --shadow-md: 0 14px 40px rgb(0 0 0 / 0.55);
+    --aura-opacity: 0.42;
+    --cover-sat: 50%;
     --cover-light: 40%;
   }
 }
 
 :root[data-theme='dark'] {
-  --bg: #0f1115;
-  --bg-elev: #171a21;
-  --bg-sunken: #0a0b0e;
-  --fg: #eef0f4;
-  --fg-muted: #a0a4b0;
-  --fg-faint: #6b6f7b;
-  --border: #262a33;
-  --hover: rgb(255 255 255 / 0.06);
-  --active: rgb(255 255 255 / 0.1);
-  --danger: #ff6b6b;
-  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
-  --shadow-md: 0 8px 24px rgb(0 0 0 / 0.5);
-  --cover-sat: 45%;
+  --bg: #0f0e0c;
+  --bg-elev: #171512;
+  --bg-sunken: #0a0908;
+  --fg: #f1ead9;
+  --fg-muted: #a69e8e;
+  --fg-faint: #6d675b;
+  --border: rgb(241 234 217 / 0.14);
+  --hairline: rgb(241 234 217 / 0.09);
+  --hover: rgb(241 234 217 / 0.06);
+  --active: rgb(241 234 217 / 0.1);
+  --accent: #ff6b3b;
+  --accent-strong: #ff8459;
+  --accent-text: #ff8a62;
+  --accent-soft: rgb(255 107 59 / 0.16);
+  --on-accent: #16140f;
+  --accent-2: #8ea0ff;
+  --accent-2-soft: rgb(142 160 255 / 0.14);
+  --danger: #ff7a66;
+  --inverse-bg: #f1ead9;
+  --inverse-fg: #16140f;
+  --inverse-muted: rgb(22 20 15 / 0.66);
+  --inverse-hairline: rgb(22 20 15 / 0.14);
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.5);
+  --shadow-md: 0 14px 40px rgb(0 0 0 / 0.55);
+  --aura-opacity: 0.42;
+  --cover-sat: 50%;
   --cover-light: 40%;
 }

@@ -50,8 +50,8 @@ function Brand({ compact = false }: { compact?: boolean }) {
         className="brand__mark"
         src={`${import.meta.env.BASE_URL}favicon.svg`}
         alt=""
-        width={28}
-        height={28}
+        width={22}
+        height={22}
       />
       {!compact && <span>Weegood</span>}
     </Link>
@@ -107,13 +107,14 @@ export function Layout({ children }: { children: ReactNode }) {
   return (
     <div className="app">
       <aside className="sidebar">
-        <Brand />
+        <div className="stack" style={{ gap: 0 }}>
+          <Brand />
+          <span className="eyebrow brand__tag">the listening room</span>
+        </div>
         <NavLinks location={location} className="nav" />
         <div className="sidebar__section">
           <div className="row">
-            <span className="sidebar__label" style={{ marginBottom: 0 }}>
-              Your playlists
-            </span>
+            <span className="sidebar__label">Your playlists</span>
             <span className="spacer" />
             <Button
               variant="ghost"

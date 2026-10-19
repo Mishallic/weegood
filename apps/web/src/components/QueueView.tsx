@@ -77,16 +77,15 @@ export function QueueView({ onClose }: QueueViewProps) {
   };
 
   const saveAsPlaylist = (name: string) => {
-    const ids = [current, ...upcoming]
-      .filter((entry): entry is Entry => entry !== undefined)
-      .map((entry) => entry.track.id);
+    const kept = [current, ...upcoming].filter((entry): entry is Entry => entry !== undefined);
     rememberTracks(
-      [current, ...upcoming]
-        .filter((entry): entry is Entry => entry !== undefined)
-        .map((entry) => entry.track),
+      kept.map((entry) => entry.track),
       true,
     );
-    void createPlaylist(name, ids).then((playlist) => {
+    void createPlaylist(
+      name,
+      kept.map((entry) => entry.track.id),
+    ).then((playlist) => {
       if (!playlist) return;
       notify(`Saved ${playlist.name}`);
       onClose?.();
@@ -99,6 +98,10 @@ export function QueueView({ onClose }: QueueViewProps) {
     const isCurrent = kind === 'current';
     const playing = isCurrent && status === 'playing';
     const draggable = kind !== 'current';
+    const activate = () => {
+      if (isCurrent) void togglePlay();
+      else void jumpTo(position);
+    };
     return (
       <div
         key={`${track.id}-${position}`}
@@ -127,15 +130,13 @@ export function QueueView({ onClose }: QueueViewProps) {
               : `Play ${track.title} now`
           }
           style={{ display: 'flex' }}
-          onClick={() => {
-            if (isCurrent) void togglePlay();
-            else void jumpTo(position);
-          }}
+          onClick={activate}
         >
           <Cover
             title={track.title}
             hue={trackHue(track)}
             src={track.artworkUrl}
+            vibe={track.vibe}
             size={40}
             playing={playing}
             paused={isCurrent && !playing}
@@ -145,12 +146,9 @@ export function QueueView({ onClose }: QueueViewProps) {
           className="track-row__main"
           role="button"
           tabIndex={0}
-          onClick={() => {
-            if (isCurrent) void togglePlay();
-            else void jumpTo(position);
-          }}
+          onClick={activate}
           onKeyDown={(event) => {
-            if (event.key === 'Enter') void (isCurrent ? togglePlay() : jumpTo(position));
+            if (event.key === 'Enter') activate();
           }}
         >
           <span className="track-row__title truncate">{track.title}</span>
@@ -198,7 +196,7 @@ export function QueueView({ onClose }: QueueViewProps) {
   return (
     <>
       <div className="drawer__header">
-        <div className="stack" style={{ gap: 0 }}>
+        <div className="stack" style={{ gap: 2 }}>
           <h2>Queue</h2>
           <span className="muted small">
             {upcoming.length > 0

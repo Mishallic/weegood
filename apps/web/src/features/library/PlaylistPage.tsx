@@ -2,6 +2,7 @@ import {
   centroid,
   formatDuration,
   ME_USER_ID,
+  NEUTRAL_VIBE,
   pluralize,
   recommendTracks,
   type Playlist,
@@ -18,6 +19,7 @@ import { EmptyState } from '../../components/EmptyState';
 import { NotFound } from '../../components/NotFound';
 import { Section } from '../../components/Section';
 import { TrackList } from '../../components/TrackList';
+import { VibeAura } from '../../components/VibeAura';
 import { useQuery } from '../../hooks/useQuery';
 import { useRecommendationInput } from '../../hooks/useRecommendationInput';
 import { hueFor, trackHue } from '../../lib/hue';
@@ -101,6 +103,12 @@ export function PlaylistPage() {
       .filter((track): track is Track => track !== undefined);
   }, [isRemote, remote.data, playlist, cachedTracks, localTracks]);
 
+  const playlistVibe = useMemo(
+    () =>
+      tracks.length > 0 ? centroid(tracks.map((track) => ({ vibe: track.vibe }))) : NEUTRAL_VIBE,
+    [tracks],
+  );
+
   const dominantGenre = useMemo(() => {
     const counts = new Map<string, number>();
     for (const track of tracks)
@@ -126,7 +134,7 @@ export function PlaylistPage() {
       id: `seed:${playlist.id}`,
       title: playlist.name,
       genreIds: [...new Set(tracks.flatMap((track) => track.genreIds))],
-      vibe: centroid(tracks.map((track) => ({ vibe: track.vibe }))),
+      vibe: playlistVibe,
     };
     return recommendTracks(input, {
       seed,
@@ -134,7 +142,7 @@ export function PlaylistPage() {
       diversity: 0.2,
       excludeTrackIds: new Set(playlist.trackIds),
     });
-  }, [playlist, editable, tracks, pool.data, input]);
+  }, [playlist, editable, tracks, pool.data, input, playlistVibe]);
 
   if (!playlist) {
     if (isRemote && (remote.loading || remote.error)) {
@@ -183,7 +191,8 @@ export function PlaylistPage() {
   return (
     <div className="page">
       <section className="hero">
-        <Cover title={playlist.name} hue={hue} src={artwork} size={140} />
+        <VibeAura vibe={playlistVibe} />
+        <Cover title={playlist.name} hue={hue} src={artwork} vibe={playlistVibe} size={168} />
         <div className="hero__body">
           <span className="hero__kicker">
             Playlist ·{' '}
@@ -277,7 +286,13 @@ export function PlaylistPage() {
                 className="track-row"
                 style={{ gridTemplateColumns: '44px minmax(0, 1fr) auto' }}
               >
-                <Cover title={track.title} hue={trackHue(track)} src={track.artworkUrl} size={44} />
+                <Cover
+                  title={track.title}
+                  hue={trackHue(track)}
+                  src={track.artworkUrl}
+                  vibe={track.vibe}
+                  size={44}
+                />
                 <div
                   className="track-row__main"
                   onClick={() => {

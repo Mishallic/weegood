@@ -1,9 +1,12 @@
 import {
+  centroid,
   FEATURED_GENRES,
+  findMood,
   GENRES,
   genreById,
   LISTENING_CONTEXTS,
   MOODS,
+  NEUTRAL_VIBE,
   describeVibe,
   type Artist,
   type ListeningContext,
@@ -15,8 +18,10 @@ import { useApp, useServices } from '../../app/storesContext';
 import { Avatar } from '../../components/Avatar';
 import { Button } from '../../components/Button';
 import { Icon } from '../../components/Icon';
+import { VibeAura } from '../../components/VibeAura';
 import { useQuery } from '../../hooks/useQuery';
 import { hueFor } from '../../lib/hue';
+import { isDefined } from '../../lib/isDefined';
 
 const STEPS = ['welcome', 'genres', 'moods', 'artists', 'context'] as const;
 type Step = (typeof STEPS)[number];
@@ -33,7 +38,10 @@ function toggleIn(list: readonly string[], id: string, max: number): string[] {
   return [...list, id];
 }
 
-/** Four questions, under a minute (ADR 0009). Artists are real, pulled live for the chosen genres. */
+/**
+ * Four questions, under a minute (ADR 0009). Artists are real, pulled live for the chosen genres,
+ * and the background is the listener's vibe taking shape as they pick.
+ */
 export function OnboardingPage() {
   const { music } = useServices();
   const existing = useApp((state) => state.profile?.onboarding ?? null);
@@ -50,6 +58,20 @@ export function OnboardingPage() {
   const [context, setContext] = useState<ListeningContext>(existing?.context ?? 'everything');
   const [saving, setSaving] = useState(false);
   const step: Step = STEPS[stepIndex] ?? 'welcome';
+
+  const selectionVibe = useMemo(() => {
+    const items = [
+      ...genreIds
+        .map((id) => genreById(id))
+        .filter(isDefined)
+        .map((genre) => ({ vibe: genre.vibe, weight: 0.7 })),
+      ...moodIds
+        .map((id) => findMood(id))
+        .filter(isDefined)
+        .map((mood) => ({ vibe: mood.vibe, weight: 1 })),
+    ];
+    return items.length > 0 ? centroid(items) : NEUTRAL_VIBE;
+  }, [genreIds, moodIds]);
 
   const sortedGenres = useMemo(() => [...genreIds].sort(), [genreIds]);
   const artistKey = stepIndex >= 3 ? `onboarding-artists:${sortedGenres.join(',')}` : null;
@@ -109,19 +131,29 @@ export function OnboardingPage() {
   };
 
   const genreList = showAllGenres ? GENRES : FEATURED_GENRES;
+  const vibeWords = describeVibe(selectionVibe, 2);
 
   return (
     <div className="onboarding">
+      <VibeAura vibe={selectionVibe} className="vibe-aura--page" />
       <div className="onboarding__card">
-        <div className="brand" style={{ padding: 0 }}>
-          <img
-            className="brand__mark"
-            src={`${import.meta.env.BASE_URL}favicon.svg`}
-            alt=""
-            width={28}
-            height={28}
-          />
-          <span>Weegood</span>
+        <div className="row" style={{ justifyContent: 'space-between' }}>
+          <div className="brand" style={{ padding: 0 }}>
+            <img
+              className="brand__mark"
+              src={`${import.meta.env.BASE_URL}favicon.svg`}
+              alt=""
+              width={22}
+              height={22}
+            />
+            <span>Weegood</span>
+          </div>
+          {stepIndex > 0 && stepIndex < 3 && (
+            <span className="eyebrow">
+              Your vibe so far:{' '}
+              <span style={{ color: 'var(--accent-text)' }}>{vibeWords.join(', ')}</span>
+            </span>
+          )}
         </div>
         <div className="onboarding__progress" aria-hidden="true">
           {STEPS.map((name, i) => (
@@ -131,8 +163,9 @@ export function OnboardingPage() {
 
         {step === 'welcome' && (
           <div className="stack">
+            <span className="eyebrow">Welcome</span>
             <h1>Let&apos;s find your vibe.</h1>
-            <p className="muted">
+            <p className="muted" style={{ maxWidth: '58ch' }}>
               Four quick questions, under a minute. Weegood streams real, full-length music from
               Audius, an open music network, and recommends from what you actually play, with a
               reason for every pick.
@@ -150,9 +183,10 @@ export function OnboardingPage() {
 
         {step === 'genres' && (
           <div className="stack">
+            <span className="eyebrow">One of four</span>
             <h1>Which genres do you keep coming back to?</h1>
             <p className="muted">
-              Pick {GENRE_MIN} to {GENRE_MAX}.
+              Pick {GENRE_MIN} to {GENRE_MAX}. Watch the background change as you choose.
             </p>
             <div className="option-grid">
               {genreList.map((genre) => {
@@ -183,6 +217,7 @@ export function OnboardingPage() {
 
         {step === 'moods' && (
           <div className="stack">
+            <span className="eyebrow">Two of four</span>
             <h1>What are you usually in the mood for?</h1>
             <p className="muted">Pick up to {MOOD_MAX}. This shapes your recommendations most.</p>
             <div className="option-grid">
@@ -200,9 +235,6 @@ export function OnboardingPage() {
                   >
                     <span className="option__title">{mood.name}</span>
                     <span className="option__desc">{mood.description}</span>
-                    <span className="option__desc faint">
-                      {describeVibe(mood.vibe, 2).join(' · ')}
-                    </span>
                   </button>
                 );
               })}
@@ -212,6 +244,7 @@ export function OnboardingPage() {
 
         {step === 'artists' && (
           <div className="stack">
+            <span className="eyebrow">Three of four</span>
             <h1>Anyone you already like?</h1>
             <p className="muted">Optional. Artists trending right now in the genres you picked.</p>
             {artistQuery.loading && artistChoices.length === 0 && (
@@ -262,6 +295,7 @@ export function OnboardingPage() {
 
         {step === 'context' && (
           <div className="stack">
+            <span className="eyebrow">Four of four</span>
             <h1>When do you listen most?</h1>
             <p className="muted">One answer. It gently tilts your starting point.</p>
             <div className="option-grid">

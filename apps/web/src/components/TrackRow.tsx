@@ -63,6 +63,7 @@ export function TrackRow({
           title={track.title}
           hue={trackHue(track)}
           src={track.artworkUrl}
+          vibe={track.vibe}
           size={44}
           playing={playing}
           paused={paused}

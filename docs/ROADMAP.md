@@ -63,7 +63,7 @@ Bundle at M1: see the CI job summary; the budget is 150 KB gzipped JavaScript.
 - [x] **P0** Deployed to GitHub Pages from main on every push (ADR 0012).
 - [ ] **P1** Service worker for offline shell and installability as a PWA (manifest exists).
 - [ ] **P1** Accessibility audit: focus order, contrast, screen reader labels on the player.
-- [ ] **P2** Visual polish pass once tester feedback lands.
+- [x] **P2** Visual identity: editorial paper-and-ink system, self-hosted type, the interface coloured by vibe (ADR 0013).
 
 ## M3: Platform
 

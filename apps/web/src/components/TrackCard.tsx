@@ -9,7 +9,7 @@ interface TrackCardProps {
   onPlay: () => void;
 }
 
-/** A square card for feed rows: artwork, title, artist and the reason it was picked. */
+/** A sleeve on the shelf: artwork, title, artist and the reason it was picked, set as a caption. */
 export function TrackCard({ recommendation, onPlay }: TrackCardProps) {
   const { track, reasons } = recommendation;
   const isCurrent = usePlayer((state) => state.currentTrackId === track.id);
@@ -26,6 +26,7 @@ export function TrackCard({ recommendation, onPlay }: TrackCardProps) {
         title={track.title}
         hue={trackHue(track)}
         src={track.artworkUrl}
+        vibe={track.vibe}
         size="100%"
         playing={playing}
         paused={isCurrent && !playing}

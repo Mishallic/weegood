@@ -18,6 +18,7 @@ import { Chip } from '../../components/Chip';
 import { Icon } from '../../components/Icon';
 import { Section } from '../../components/Section';
 import { TrackCards } from '../../components/TrackCards';
+import { VibeAura } from '../../components/VibeAura';
 import { useHomeCandidates } from '../../hooks/useHomeCandidates';
 import { useRecommendationInput } from '../../hooks/useRecommendationInput';
 import { greetingForHour } from '../../lib/format';
@@ -68,7 +69,8 @@ function HomeFeed({ onRefresh }: { onRefresh: () => void }) {
 
   const artists = useMemo(() => recommendArtists(input, artistPool, 6), [input, artistPool]);
 
-  const vibeWords = describeVibe(liveProfile?.vibe ?? NEUTRAL_VIBE, 3);
+  const currentVibe = liveProfile?.vibe ?? NEUTRAL_VIBE;
+  const vibeWords = describeVibe(currentVibe, 3);
   const topGenres = topGenreIds(liveProfile ?? createEmptyProfile(0), 3)
     .map((id) => genreById(id))
     .filter(isDefined);
@@ -77,10 +79,18 @@ function HomeFeed({ onRefresh }: { onRefresh: () => void }) {
   return (
     <div className="page">
       <header className="page-header">
+        <VibeAura vibe={currentVibe} />
         <div className="page-header__text">
-          <h1>{greetingForHour(new Date().getHours())}</h1>
-          <p className="muted">
-            Your vibe right now: <strong>{vibeWords.join(', ')}</strong>
+          <span className="eyebrow">
+            {new Date().toLocaleDateString(undefined, {
+              weekday: 'long',
+              day: 'numeric',
+              month: 'long',
+            })}
+          </span>
+          <h1>{greetingForHour(new Date().getHours())}.</h1>
+          <p>
+            Your vibe right now reads <strong>{vibeWords.join(', ')}</strong>.
           </p>
           {topGenres.length > 0 && (
             <div className="chip-row">

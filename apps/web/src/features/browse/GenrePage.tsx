@@ -11,6 +11,7 @@ import { FollowButton } from '../../components/FollowButton';
 import { NotFound } from '../../components/NotFound';
 import { Section } from '../../components/Section';
 import { TrackList } from '../../components/TrackList';
+import { VibeAura } from '../../components/VibeAura';
 import { useQuery } from '../../hooks/useQuery';
 import { useRecommendationInput } from '../../hooks/useRecommendationInput';
 import type { TrendingWindow } from '../../providers/types';
@@ -68,7 +69,8 @@ export function GenrePage() {
   return (
     <div className="page">
       <section className="hero">
-        <Cover title={genre.name} hue={genre.hue} src={tracks[0]?.artworkUrl} size={140} />
+        <VibeAura vibe={genre.vibe} />
+        <Cover title={genre.name} hue={genre.hue} vibe={genre.vibe} size={168} />
         <div className="hero__body">
           <span className="hero__kicker">Genre</span>
           <h1 className="hero__title">{genre.name}</h1>

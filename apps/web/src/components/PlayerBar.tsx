@@ -44,11 +44,15 @@ export function PlayerBar() {
         <div className="player__now">
           {track ? (
             <>
-              <Cover title={track.title} hue={trackHue(track)} src={track.artworkUrl} size={48} />
+              <Cover
+                title={track.title}
+                hue={trackHue(track)}
+                src={track.artworkUrl}
+                vibe={track.vibe}
+                size={52}
+              />
               <div className="player__now-text">
-                <span className="truncate" style={{ fontWeight: 600 }}>
-                  {track.title}
-                </span>
+                <span className="player__title truncate">{track.title}</span>
                 <span className="muted small truncate">
                   {track.artistId ? (
                     <Link href={`/artist/${encodeURIComponent(track.artistId)}`}>
@@ -139,11 +143,7 @@ export function PlayerBar() {
             />
             <span>{formatDuration(durationMs)}</span>
           </div>
-          {error && (
-            <span className="small" style={{ color: 'var(--danger)' }}>
-              {error}
-            </span>
-          )}
+          {error && <span className="small player__error">{error}</span>}
         </div>
 
         <div className="player__right">

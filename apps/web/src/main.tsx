@@ -5,6 +5,7 @@ import { App } from './app/App';
 import { createBrowserServices } from './app/services';
 import { createBrowserEngine, createStores } from './app/stores';
 import { StoresProvider } from './app/StoresProvider';
+import './styles/fonts.css';
 import './styles/tokens.css';
 import './styles/app.css';
 
