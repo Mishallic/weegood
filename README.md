@@ -9,6 +9,8 @@ and plays the files you already own alongside everything else.
 **Status:** pre-alpha. The web app is feature complete on real music and ready for a tester round
 (see [docs/ROADMAP.md](docs/ROADMAP.md)). Mobile and desktop follow on the same core.
 
+**Live:** https://mishallic.github.io/weegood/ , deployed from `main` on every push by GitHub Actions.
+
 ## What it does
 
 - Streams real songs, full length, from an open music network. No account, no key, no licensing

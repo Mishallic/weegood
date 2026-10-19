@@ -59,6 +59,7 @@ Bundle at M1: see the CI job summary; the budget is 150 KB gzipped JavaScript.
       recommendations.
 - [ ] **P1** "More like this" on every track, and "Not for me" feedback weighted above implicit
       signals ("Not for me" exists; the weighting review does not).
+- [x] **P0** Deployed to GitHub Pages from main on every push (ADR 0012).
 - [ ] **P1** Service worker for offline shell and installability as a PWA (manifest exists).
 - [ ] **P1** Accessibility audit: focus order, contrast, screen reader labels on the player.
 - [ ] **P2** Visual polish pass once tester feedback lands.
