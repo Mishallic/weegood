@@ -45,7 +45,13 @@ function NavLinks({ location, className }: { location: string; className: string
 function Brand({ compact = false }: { compact?: boolean }) {
   return (
     <Link href="/" className="brand" aria-label="Weegood home">
-      <img className="brand__mark" src="/favicon.svg" alt="" width={28} height={28} />
+      <img
+        className="brand__mark"
+        src={`${import.meta.env.BASE_URL}favicon.svg`}
+        alt=""
+        width={28}
+        height={28}
+      />
       {!compact && <span>Weegood</span>}
     </Link>
   );

@@ -16,5 +16,6 @@ New decisions get the next number. Accepted ADRs are not edited; write a new one
 | [0009](0009-onboarding-and-returning-user-detection.md)             | Questionnaire for new users, persisted profile for returning users | Accepted           |
 | [0010](0010-real-music-from-streaming-providers.md)                 | Real music from streaming providers, Audius first                  | Accepted           |
 | [0011](0011-on-device-learned-ranking-and-audio-analysis.md)        | On-device learned ranking and audio analysis                       | Accepted           |
+| [0012](0012-deploy-web-app-to-github-pages.md)                      | Deploy the web app to GitHub Pages                                 | Accepted           |
 
 Template: [0000-template.md](0000-template.md).

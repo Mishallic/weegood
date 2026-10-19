@@ -114,7 +114,13 @@ export function OnboardingPage() {
     <div className="onboarding">
       <div className="onboarding__card">
         <div className="brand" style={{ padding: 0 }}>
-          <img className="brand__mark" src="/favicon.svg" alt="" width={28} height={28} />
+          <img
+            className="brand__mark"
+            src={`${import.meta.env.BASE_URL}favicon.svg`}
+            alt=""
+            width={28}
+            height={28}
+          />
           <span>Weegood</span>
         </div>
         <div className="onboarding__progress" aria-hidden="true">
