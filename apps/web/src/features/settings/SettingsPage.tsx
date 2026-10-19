@@ -277,8 +277,8 @@ export function SettingsPage() {
           your own files alongside.
         </p>
         <p className="muted small">
-          Shortcuts: Space or K play/pause · J and L seek · N and P next/previous · M mute · /
-          search.
+          Shortcuts: Space or K play/pause · J and L seek · N and P next/previous · M mute · Q queue
+          · / search.
         </p>
       </section>
 
